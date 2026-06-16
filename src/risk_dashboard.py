@@ -2765,7 +2765,7 @@ def render_dashboard(
         signal_rows = "\n".join(
             (
                 f"<tr class=\"signal-{html.escape(signal.status)}\"><td><span class=\"signal-pill {html.escape(signal.status)}\">{html.escape(signal.action)}</span></td>"
-                f"<td>{html.escape(signal.symbol)}</td><td>{html.escape(signal.name)}</td><td>{signal.latest_price:.2f}</td>"
+                f"<td>{html.escape(signal.symbol)}</td><td class=\"name-cell\"><span class=\"asset-name\">{html.escape(signal.name)}</span></td><td>{signal.latest_price:.2f}</td>"
                 f"<td>{format_optional_price(signal.cost_price)}</td><td>{format_optional_price(signal.ma20)}</td><td>{format_optional_price(signal.ma60)}</td>"
                 f"<td>{'' if signal.rsi14 is None else f'{signal.rsi14:.1f}'}</td>"
                 f"<td>{'' if signal.volume_ratio is None else f'{signal.volume_ratio:.2f}x'}</td>"
@@ -2836,7 +2836,7 @@ def render_dashboard(
             else "尚未套用今日行情快照；回撤、回测与策略监控仍使用当前历史资料。"
         )
         model_rows = "\n".join(
-            f"<tr><td>{html.escape(position.symbol)}</td><td>{html.escape(position.name)}</td><td>{'待执行价' if position.price is None else f'{position.price:.2f}'}</td><td>{'等待行情' if position.current_price is None else f'{position.current_price:.2f}'}</td><td>{'待执行价' if position.shares is None else f'{position.shares:,}'}</td><td>{'待执行价' if position.market_value is None else format_twd(position.market_value)}</td><td>{'等待行情' if position.current_market_value is None else format_twd(position.current_market_value)}</td><td>{'等待行情' if position.unrealized_pnl is None else format_twd(position.unrealized_pnl)}</td><td>{'' if position.unrealized_pnl_pct is None else format_percent(position.unrealized_pnl_pct)}</td><td>{format_percent(position.target_weight)}</td><td>{format_twd(position.target_value)}</td><td>{'' if position.buy_commission is None else format_twd(position.buy_commission)}</td></tr>"
+            f"<tr><td>{html.escape(position.symbol)}</td><td class=\"name-cell\"><span class=\"asset-name\">{html.escape(position.name)}</span></td><td>{'待执行价' if position.price is None else f'{position.price:.2f}'}</td><td>{'等待行情' if position.current_price is None else f'{position.current_price:.2f}'}</td><td>{'待执行价' if position.shares is None else f'{position.shares:,}'}</td><td>{'待执行价' if position.market_value is None else format_twd(position.market_value)}</td><td>{'等待行情' if position.current_market_value is None else format_twd(position.current_market_value)}</td><td>{'等待行情' if position.unrealized_pnl is None else format_twd(position.unrealized_pnl)}</td><td>{'' if position.unrealized_pnl_pct is None else format_percent(position.unrealized_pnl_pct)}</td><td>{format_percent(position.target_weight)}</td><td>{format_twd(position.target_value)}</td><td>{'' if position.buy_commission is None else format_twd(position.buy_commission)}</td></tr>"
             for position in model_portfolio.positions
         )
         default_trade_state = {}
@@ -2845,7 +2845,7 @@ def render_dashboard(
         default_trade_state_json = json.dumps(default_trade_state, ensure_ascii=False)
         if actionable_signals:
             manual_trade_rows = "\n".join(
-                f"<tr data-symbol=\"{html.escape(signal.symbol)}\" data-trade-id=\"{html.escape(signal.trade_id)}\"><td><span class=\"trade-status\" data-trade-status=\"{html.escape(signal.trade_id)}\">待确认</span></td><td>{'买入' if signal.status == 'buy' else '卖出'}</td><td>{html.escape(signal.symbol)}<div class=\"trade-id\">单号：{html.escape(signal.trade_id)}</div></td><td>{html.escape(signal.name)}</td><td>{signal.latest_price:.2f}</td><td>{'' if signal.proposed_shares is None else f'{signal.proposed_shares:,}'}</td><td>{'' if signal.proposed_shares is None else format_twd(signal.latest_price * signal.proposed_shares)}</td><td>页面复核</td><td>脚本落账</td><td><button class=\"trade-button\" type=\"button\" data-trade-toggle=\"{html.escape(signal.trade_id)}\">页面标记已确认</button></td></tr>"
+                f"<tr data-symbol=\"{html.escape(signal.symbol)}\" data-trade-id=\"{html.escape(signal.trade_id)}\"><td><span class=\"trade-status\" data-trade-status=\"{html.escape(signal.trade_id)}\">待确认</span></td><td>{'买入' if signal.status == 'buy' else '卖出'}</td><td>{html.escape(signal.symbol)}<div class=\"trade-id\">单号：{html.escape(signal.trade_id)}</div></td><td class=\"name-cell\"><span class=\"asset-name\">{html.escape(signal.name)}</span></td><td>{signal.latest_price:.2f}</td><td>{'' if signal.proposed_shares is None else f'{signal.proposed_shares:,}'}</td><td>{'' if signal.proposed_shares is None else format_twd(signal.latest_price * signal.proposed_shares)}</td><td>页面复核</td><td>脚本落账</td><td><button class=\"trade-button\" type=\"button\" data-trade-toggle=\"{html.escape(signal.trade_id)}\">页面标记已确认</button></td></tr>"
                 for signal in actionable_signals
             )
         else:
@@ -3361,6 +3361,8 @@ def render_dashboard(
       align-items: start;
     }}
     .compact-table th, .compact-table td {{ padding: 8px 7px; }}
+    .name-cell {{ min-width: 112px; }}
+    .asset-name {{ display: inline-block; white-space: nowrap; }}
     .footer-note {{ margin-top: 12px; font-size: 12px; color: var(--muted); }}
     .issues ul {{ margin: 0; padding-left: 18px; color: var(--muted); }}
     code {{ color: var(--green); background: var(--green-soft); padding: 2px 5px; border-radius: 5px; }}
