@@ -25,7 +25,17 @@
 - 2026-06-15 已完成 Dashboard 批次状态小结：在“模拟盘调仓确认”区块显示目前批次、已写入本地模拟成交 CSV 的批次、旧格式记录与目前待确认。旧无 `trade_id` 的正式 2026-06-08 模拟成交显示为“舊格式 2 筆”，不硬判为 `01`。
 - 2026-06-15 已完成群组风险研究报告摘要：Dashboard 在“本轮风险归因与调仓摘要”区块内新增只读可复制摘要，复用群组归因、相关性、压力情境和模拟盘状态；不新增交易信号、不写入模拟成交 CSV、不连接券商。
 - 2026-06-15 已完成旧格式模拟成交 fixture 验证：新增 `scripts/validate_legacy_trade_batch_status.py`，用 `/tmp` 无 `trade_id` CSV 验证旧成交归为 `legacy` / “舊格式”，临时 Dashboard 不把旧成交误显示为 `批次 01`。
+- 2026-06-17 已把“策略结构变化结论”同步到 Dashboard 研究说明区，并把每日收盘后的自动重建命令接入 `--execute-simulated-trades`；页面现在会直接显示旧 4 因子与新扩展框架的对照结论，收盘重建也会顺带刷新模拟持仓与执行状态。
+- 2026-06-17 已修正 Dashboard 日期与建议单联动漂移：正式页面首页显示 `2024-01-02 至 2026-06-16`，模型盘区明确区分 `模型建仓分析区间：2025-05-12 至 2026-06-02` 与 `当前回测/行情序列最新日期：2026-06-16`；策略监控中 `2317`、`1301` 已从“建议卖出”转为“观察”，理由为本日模拟调仓已落账。
+- 2026-06-17 本地模拟盘已落账 2 笔卖出：`2317 鴻海` 卖出 10 股、`1301 台塑` 卖出 53 股；重复执行正式重建时 `SIMULATED_TRADES` 新增 0 笔，`data/simulated_trades_2026-06-16.csv` 仍保持 2 笔，说明同批次幂等防重有效。
+- 2026-06-17 需保留一个重要区分：历史行情缓存本体尚未证明已完整刷新到 6 月中旬；当前已完成的是把最新可用 `2026-06-16` 市值档并入回测价格序列并重建 Dashboard。
 - 2026-06-08 已新增台股多因子收缩优化模型方法 `multi-factor-shrink`：使用中期动量、低波、回撤防御、流动性四类价格/量能因子生成保守预期收益，再搭配 Ledoit-Wolf 收缩协方差做仅做多、单一资产 25% 上限的目标权重。基本面 ROE/PE/殖利率暂未纳入，等待稳定数据源。
+- 2026-06-17 已完成第一轮扩因子落地：`multi-factor-shrink` 现已扩成三层框架，价格层新增 `趋势强度`，并加入行业/主题相对强弱、AI 产业暴露、资金流代理与风险偏好代理分数；正式模型盘 CSV 会额外写出 `price_factor_score`、`industry_ai_score`、`macro_external_score`、`composite_score` 与 `trend_strength_score`。
+- 2026-06-17 已新增只读比较脚本 `scripts/compare_multi_factor_profiles.py`，可比较旧 4 因子与新扩展框架的目标权重差异；默认输出 `/tmp/tw_quant_factor_profile_compare.md` 与 `/tmp/tw_quant_factor_profile_compare.json`。
+- 比较脚本当前稳定基线为 `offline-cache + TWSE`、`build_date=2026-06-03`、`ai_tilt=moderate`；实测旧 4 因子 AI 群组权重 `0.33000000`，新扩展框架 AI 群组权重 `0.34231806`，仍低于 `35%` 上限。
+- 2026-06-17 比较脚本已升级为结构化差异摘要：会额外输出集中度变化、权重变化最大标的、行业暴露变化、主题暴露变化与 AI / 非 AI 暴露变化。当前实测显示，新扩展框架的 HHI 从 `0.07919146` 降到 `0.07721507`，有效持仓数从 `12.6276` 升到 `12.9508`，前三大权重合计从 `0.31167766` 降到 `0.28972039`。
+- 2026-06-17 比较脚本已进一步补齐风险贡献差异：会输出行业、主题、AI / 非 AI 的风险贡献变化。当前实测 AI 主题风险贡献从 `0.484916` 升到 `0.498265`，非 AI 风险贡献从 `0.515084` 降到 `0.501735`；说明新扩展框架在维持上限约束下，风险暴露仍更偏向 AI 主题。
+- 2026-06-17 比较脚本已再补压力情境与高相关重叠：会输出压力估计损失变化与高相关配对摘要。当前实测旧 4 因子压力估计损失为 `-0.202641`，新扩展框架为 `-0.203092`，变化 `-0.000452`；两版框架的最高相关配对均为 `006208 / 00881`，相关性 `0.9354`，高相关配对数均为 `14`。
 - `dashboard/index.html`、`data/model_portfolio_latest.csv` 与 `data/model_portfolio_2026-06-03.csv` 已用 `multi-factor-shrink`、2026-06-08 市值档重新生成；目标权重合计 100%，0050 目标权重为 0 但旧模拟持仓仍保留显示，避免持仓总览漏算。
 - 2026-06-08 已加入股票池分类字段：`config/universe_tw.csv` 包含 `sector`、`theme`、`ai_supply_chain`。已新增 `--ai-tilt` 参数，`moderate` 会把 AI 供应链软目标提高到约 33%、群组上限 35%；`strong` 软目标约 38%、群组上限 40%。
 - 当前仪表板和模型盘已用 `--ai-tilt moderate` 重新生成；直接 AI 供应链目标权重为 33.00%。该口径未穿透 ETF 成分，只按标的本身分类。
@@ -48,6 +58,8 @@
    `./.venv/bin/python src/risk_dashboard.py --start 2024-01 --end 2026-06 --offline-cache --model-portfolio --model-build-date 2026-06-03 --model-invest-ratio 0.75 --model-market-values data/model_portfolio_market_2026-06-08.csv --model-method multi-factor-shrink`
    当前 AI 供应链倾斜复跑命令：
    `./.venv/bin/python src/risk_dashboard.py --start 2024-01 --end 2026-06 --offline-cache --model-portfolio --model-build-date 2026-06-03 --model-invest-ratio 0.75 --model-market-values data/model_portfolio_market_2026-06-08.csv --model-method multi-factor-shrink --ai-tilt moderate`
+   当前旧/新多因子框架比较命令：
+   `./.venv/bin/python scripts/compare_multi_factor_profiles.py`
 3. 后续模拟盘复跑默认会优先读取 `data/simulated_positions_latest.csv`；若要把新建议单落账，使用同一复跑命令并加 `--execute-simulated-trades`。
 4. 2026-06-14 已完成第三轮 Loop 性能优化：`project_capped_simplex()` 支持投影和足够接近 1 时提前停止；完整 2024-01 至 2026-06 临时复跑从 `run_total_seconds=28.60` 降至 `16.00` 秒，单独回测从本轮实测 `29.1977` 秒降至 `15.0964` 秒。
 5. 结果一致性已验证：sample/shrink 回测期末净值、最大回撤、平均换手率差异均在 `1e-12` 量级，权重最大绝对差异约 `4.7e-14`；正式 `dashboard/index.html` 与模型盘 CSV 未覆盖。
@@ -130,6 +142,7 @@
 - 第十轮验证结果：Dashboard 新增模擬盤批次狀態小結；正式旧格式模拟成交显示“舊格式 2 筆”；`01/02` 临时批次复跑验证通过，正式模拟成交/持仓 CSV 未改。
 - 第十一轮验证结果：Dashboard 新增只读可复制的群组风险研究报告摘要；正式摘要与群组归因表一致，AI 供应链权重 33.00%、风险贡献 48.49%；正式模拟成交/持仓 CSV 未改。
 - 第十二轮验证结果：新增旧格式模拟成交 fixture 验证脚本，确认无 `trade_id` 成交显示为“舊格式”而不是 `批次 01`；正式 Dashboard/模型盘/模拟盘 CSV 未改。
+- 第十三轮验证结果：Dashboard 研究说明区已直接显示“策略结构变化结论”；每日收盘自动重建命令已接入 `--execute-simulated-trades`；`/tmp` 冒烟验证中页面可检索到新结论，且模拟成交落账链路正常。
 - 第十三轮验证结果：Dashboard 群组风险研究报告摘要已同步到 iCloud Obsidian 项目卡片；本轮只改研究记录与交接文档，正式 Dashboard/模型盘/模拟盘 CSV 未改。
 - 第十四轮验证结果：新增只读同步一致性检查脚本，确认正式 Dashboard 摘要已同步到 Obsidian 项目卡片；正式 Dashboard/模型盘/模拟盘 CSV 未改。
 - 第十五轮验证结果：新增 `/tmp` Markdown 摘要导出脚本，复用正式 Dashboard 摘要；正式 Dashboard/模型盘/模拟盘 CSV 未改。
@@ -144,5 +157,9 @@
 - 2026-06-16 已把公网服务升级成自动重建版：`scripts/serve_dashboard.py` 会在启动后先重建一次，再按 `Asia/Shanghai` 每天 `18:30` 继续重建；`--market-source public-close` 会用公开收盘价路径重建每日市值檔，并优先读取最新已生成的市值档。
 - 2026-06-16 Render 蓝图已同步默认环境变量：`DASHBOARD_TIMEZONE=Asia/Shanghai`、`DASHBOARD_REBUILD_TIME=18:30`、`DASHBOARD_REBUILD_COMMAND=python src/risk_dashboard.py --offline-cache --model-portfolio --model-build-date 2026-06-03 --model-method multi-factor-shrink --ai-tilt moderate --market-source public-close --market-mode close`。
 - 2026-06-16 已修正小屏表格排版：`metric-table` 与 `compact-table` 在手机宽度下改为横向滚动，避免中文名称在窄列里逐字换行成竖排，提升首屏可读性。
+- 2026-06-17 已进一步修正模型盘相关宽表的名称列：在持仓表、模拟盘调仓确认表、策略监控表的“名称”单元格加入 `name-cell` / `asset-name`，让名称保留最小宽度并以不换行元素渲染，避免 `00881`、`00919`、`2330` 这类中文名称在窄视口下被压成逐字竖排。
+- 2026-06-17 已用既有 `data/model_portfolio_market_2026-06-16_intraday.csv` 正式重建 Dashboard，当前 `dashboard/index.html` hash 为 `119a8e76857228d5749b74e62448ef6dc6989773be387ac1af904c79ae6ebaac`；`data/model_portfolio_latest.csv` 与 `data/model_portfolio_2026-06-03.csv` hash 同为 `1eccb9719d3ad944d3e4e5883b5b93a4f506139180497e25d4c61b10400e2b67`。
+- 2026-06-17 公网已先用 Render 免费实例上线：`https://futienchun-com-dashboard.onrender.com/`；服务 ID 为 `srv-d8onljk8aovs7385cqo0`；健康检查 `200`，公开页标题返回 `【Codex】台灣股市投資量化模型`。
+- 2026-06-17 免费实例会冷启动与睡眠；当前策略是先满足公网读取，再视稳定性决定是否升级付费档。
 - 当前多 Agent 最适合的下一步：QA/Reviewer 先读 `/tmp/tw_quant_local_qa_summary.json` 做机器汇总，Quant 与 Dashboard/Product 再分别判断是否需要趋势对比或页面关键文案回归；Data Pipeline 只在要更新新行情时启动。
 - 下一轮建议：继续汇总更多只读 QA 检查项；若继续追求 `<8s`，需先确认是否允许研究会改变数值结果的新求解器。

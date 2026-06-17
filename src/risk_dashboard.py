@@ -85,6 +85,7 @@ class BacktestMetrics:
 @dataclass(frozen=True)
 class BacktestResult:
     dates: list[str]
+    rebalance_dates: list[str]
     sample_curve: np.ndarray
     shrink_curve: np.ndarray
     sample_returns: np.ndarray
@@ -107,6 +108,11 @@ class ModelPosition:
     annual_volatility: float | None
     drawdown_days: int | None
     risk_score: float | None
+    price_factor_score: float | None
+    industry_ai_score: float | None
+    macro_external_score: float | None
+    composite_score: float | None
+    trend_strength_score: float | None
     target_weight: float
     target_value: float
     shares: int | None
@@ -132,6 +138,7 @@ class ModelPortfolio:
     execution_date: str
     execution_price_status: str
     method: str
+    ai_tilt: str | None
     lookback_years: int
     initial_cash: float
     invest_ratio: float
@@ -187,6 +194,15 @@ class MarketSnapshotUpdate:
     quote_time: str
     quote_count: int
     missing_count: int
+
+
+@dataclass(frozen=True)
+class FactorScoreBreakdown:
+    price_factor_score: float
+    industry_ai_score: float
+    macro_external_score: float
+    composite_score: float
+    trend_strength_score: float
 
 
 def parse_args() -> argparse.Namespace:
@@ -769,10 +785,12 @@ def rolling_rebalance_backtest(returns: np.ndarray, dates: list[str], window: in
     backtest_dates: list[str] = []
     sample_turnovers: list[float] = []
     shrink_turnovers: list[float] = []
+    rebalance_dates: list[str] = []
     previous_sample_weights: np.ndarray | None = None
     previous_shrink_weights: np.ndarray | None = None
 
     for start_index in range(window, len(returns), step):
+        rebalance_dates.append(dates[start_index])
         estimation_returns = returns[start_index - window : start_index]
         sample_cov = covariance_matrix(estimation_returns)
         shrink_cov, _ = estimate_shrink_covariance(estimation_returns)
@@ -800,6 +818,7 @@ def rolling_rebalance_backtest(returns: np.ndarray, dates: list[str], window: in
     shrink_curve = np.cumprod(1 + shrink_returns)
     return BacktestResult(
         dates=backtest_dates,
+        rebalance_dates=rebalance_dates,
         sample_curve=sample_curve,
         shrink_curve=shrink_curve,
         sample_returns=sample_returns,
@@ -1054,6 +1073,89 @@ def capped_compound_return(series: np.ndarray, days: int) -> float:
     return float(series[-1] / series[-(days + 1)] - 1.0)
 
 
+def safe_group_value(name: str) -> str:
+    value = str(name or "").strip()
+    return value or "unclassified"
+
+
+def average_group_scores(
+    values: np.ndarray,
+    group_names: list[str],
+    valid_indices: list[int],
+) -> np.ndarray:
+    result = np.zeros(len(valid_indices), dtype=float)
+    if not valid_indices:
+        return result
+    grouped: dict[str, list[float]] = {}
+    for offset, index in enumerate(valid_indices):
+        group = safe_group_value(group_names[index] if index < len(group_names) else "")
+        grouped.setdefault(group, []).append(float(values[offset]))
+    group_avg = {group: float(np.mean(scores)) for group, scores in grouped.items()}
+    for offset, index in enumerate(valid_indices):
+        group = safe_group_value(group_names[index] if index < len(group_names) else "")
+        result[offset] = group_avg[group]
+    return result
+
+
+def build_proxy_external_overlay(
+    assets: list[Asset],
+    price_data: PriceData,
+    valid_indices: list[int],
+    momentum_values: np.ndarray,
+    low_vol_values: np.ndarray,
+    drawdown_values: np.ndarray,
+    liquidity_values: np.ndarray,
+    trend_strength_values: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    if not valid_indices:
+        return np.zeros(0, dtype=float), np.zeros(0, dtype=float)
+    asset_by_symbol = {asset.symbol: asset for asset in assets}
+    symbols = price_data.symbols
+
+    sector_names = [asset_by_symbol.get(symbol, Asset(symbol, "", "", "")).sector for symbol in symbols]
+    theme_names = [asset_by_symbol.get(symbol, Asset(symbol, "", "", "")).theme for symbol in symbols]
+    ai_mask = np.array(
+        [asset_by_symbol.get(symbols[index], Asset(symbols[index], "", "", "")).ai_supply_chain for index in valid_indices],
+        dtype=bool,
+    )
+
+    sector_relative = average_group_scores(momentum_values + trend_strength_values, sector_names, valid_indices)
+    theme_relative = average_group_scores(momentum_values + 0.5 * liquidity_values, theme_names, valid_indices)
+    sector_relative_z = zscore(sector_relative)
+    theme_relative_z = zscore(theme_relative)
+    ai_score = np.where(ai_mask, 1.0, -0.25)
+    industry_ai_score = (
+        0.40 * sector_relative_z
+        + 0.25 * theme_relative_z
+        + 0.20 * zscore(ai_score)
+        + 0.15 * zscore(liquidity_values)
+    )
+
+    correlation_window = min(60, price_data.prices.shape[0] - 1)
+    if correlation_window >= MIN_OBSERVATIONS:
+        recent_returns = simple_returns(price_data.prices[-(correlation_window + 1) :])
+        valid_returns = recent_returns[:, valid_indices]
+        corr = np.corrcoef(valid_returns, rowvar=False)
+        if corr.ndim == 0:
+            avg_corr = np.zeros(len(valid_indices), dtype=float)
+        else:
+            corr = np.nan_to_num(corr, nan=0.0)
+            avg_corr = np.mean(corr - np.eye(corr.shape[0]), axis=1)
+    else:
+        avg_corr = np.zeros(len(valid_indices), dtype=float)
+    volatility_pressure = zscore(-low_vol_values)
+    crowding_pressure = zscore(avg_corr)
+    ai_crowding_pressure = np.where(ai_mask, 1.0, 0.0)
+    funds_flow_proxy = zscore(liquidity_values + 0.5 * momentum_values)
+    macro_external_score = (
+        0.35 * funds_flow_proxy
+        + 0.30 * zscore(-crowding_pressure)
+        + 0.20 * zscore(-volatility_pressure)
+        + 0.15 * zscore(-ai_crowding_pressure)
+    )
+    return industry_ai_score, macro_external_score
+
+
 def max_sharpe_weights(expected_returns: np.ndarray, covariance: np.ndarray, max_weight: float = MAX_WEIGHT) -> np.ndarray:
     n_assets = covariance.shape[0]
     if n_assets * max_weight < 1:
@@ -1279,6 +1381,7 @@ def multi_factor_shrink_weights(
     low_vol_values: list[float] = []
     drawdown_values: list[float] = []
     liquidity_values: list[float] = []
+    trend_strength_values: list[float] = []
 
     for index, symbol in enumerate(price_data.symbols):
         series = window_prices[:, index]
@@ -1296,6 +1399,11 @@ def multi_factor_shrink_weights(
             momentum = float(series[-22] / series[-253] - 1.0)
         else:
             momentum = capped_compound_return(series, min(120, len(series) - 1))
+        ma20 = mean_tail(series, 20)
+        ma60 = mean_tail(series, 60)
+        price_vs_ma60 = float(series[-1] / ma60 - 1.0) if ma60 and ma60 > 0 else 0.0
+        ma_spread = float(ma20 / ma60 - 1.0) if ma20 and ma60 and ma60 > 0 else 0.0
+        trend_strength = 0.6 * price_vs_ma60 + 0.4 * ma_spread
         liquidity = 0.0
         if price_data.amounts is not None:
             amount_series = price_data.amounts[start_index : price_index + 1, index]
@@ -1306,6 +1414,7 @@ def multi_factor_shrink_weights(
         low_vol_values.append(-volatility)
         drawdown_values.append(-max_dd)
         liquidity_values.append(liquidity)
+        trend_strength_values.append(trend_strength)
         metrics[symbol] = {
             "max_drawdown": max_dd,
             "annual_volatility": volatility,
@@ -1321,7 +1430,25 @@ def multi_factor_shrink_weights(
     low_vol_z = zscore(np.array(low_vol_values, dtype=float))
     drawdown_z = zscore(np.array(drawdown_values, dtype=float))
     liquidity_z = zscore(np.array(liquidity_values, dtype=float))
-    composite_scores = 0.35 * momentum_z + 0.25 * low_vol_z + 0.25 * drawdown_z + 0.15 * liquidity_z
+    trend_strength_z = zscore(np.array(trend_strength_values, dtype=float))
+    price_factor_scores = (
+        0.28 * momentum_z
+        + 0.22 * low_vol_z
+        + 0.20 * drawdown_z
+        + 0.12 * liquidity_z
+        + 0.18 * trend_strength_z
+    )
+    industry_ai_scores, macro_external_scores = build_proxy_external_overlay(
+        assets=assets,
+        price_data=price_data,
+        valid_indices=valid_indices,
+        momentum_values=np.array(momentum_values, dtype=float),
+        low_vol_values=np.array(low_vol_values, dtype=float),
+        drawdown_values=np.array(drawdown_values, dtype=float),
+        liquidity_values=np.array(liquidity_values, dtype=float),
+        trend_strength_values=np.array(trend_strength_values, dtype=float),
+    )
+    composite_scores = 0.60 * price_factor_scores + 0.25 * industry_ai_scores + 0.15 * macro_external_scores
     expected_returns = 0.06 + 0.025 * composite_scores
     valid_covariance = shrink_covariance[np.ix_(valid_indices, valid_indices)]
     valid_weights = drop_tiny_weights(max_sharpe_weights(expected_returns, valid_covariance, max_weight), max_weight=max_weight)
@@ -1342,6 +1469,11 @@ def multi_factor_shrink_weights(
         symbol = price_data.symbols[index]
         weights[index] = valid_weights[offset]
         metrics[symbol]["risk_score"] = float(composite_scores[offset])
+        metrics[symbol]["price_factor_score"] = float(price_factor_scores[offset])
+        metrics[symbol]["industry_ai_score"] = float(industry_ai_scores[offset])
+        metrics[symbol]["macro_external_score"] = float(macro_external_scores[offset])
+        metrics[symbol]["composite_score"] = float(composite_scores[offset])
+        metrics[symbol]["trend_strength_score"] = float(trend_strength_z[offset])
     return weights, metrics, price_date, price_data.dates[start_index], 1
 
 
@@ -1381,6 +1513,154 @@ def consecutive_true(flags: list[bool]) -> int:
             break
         count += 1
     return count
+
+
+def concentration_metrics(weights: np.ndarray) -> dict[str, float]:
+    clean = np.asarray(weights, dtype=float)
+    hhi = float(np.sum(clean**2))
+    top3_weight = float(np.sum(np.sort(clean)[-3:])) if len(clean) >= 3 else float(np.sum(clean))
+    active_count = float(np.sum(clean > 1e-6))
+    return {
+        "hhi": hhi,
+        "effective_n": float(1.0 / hhi) if hhi > 0 else 0.0,
+        "top3_weight": top3_weight,
+        "active_count": active_count,
+        "max_weight": float(np.max(clean)) if len(clean) else 0.0,
+    }
+
+
+def legacy_multi_factor_weights(
+    assets: list[Asset],
+    price_data: PriceData,
+    build_date: str,
+    shrink_covariance: np.ndarray,
+    ai_tilt: str = "none",
+    max_weight: float = MAX_WEIGHT,
+) -> np.ndarray:
+    price_index = previous_available_date_index(price_data.dates, build_date)
+    start_index = max(0, price_index - ANNUALIZATION_DAYS)
+    observations = price_index - start_index + 1
+    if observations < MIN_OBSERVATIONS:
+        raise RuntimeError(f"旧 4 因子比较至少需要 {MIN_OBSERVATIONS} 个共同交易日，当前仅有 {observations} 个。")
+
+    window_prices = price_data.prices[start_index : price_index + 1]
+    window_returns = simple_returns(window_prices)
+    valid_indices: list[int] = []
+    momentum_values: list[float] = []
+    low_vol_values: list[float] = []
+    drawdown_values: list[float] = []
+    liquidity_values: list[float] = []
+
+    for index, _symbol in enumerate(price_data.symbols):
+        series = window_prices[:, index]
+        asset_returns = window_returns[:, index]
+        if len(series) < MIN_OBSERVATIONS or np.any(series <= 0) or not np.all(np.isfinite(series)):
+            continue
+        curve = series / series[0]
+        max_dd = abs(float(drawdown(curve).min()))
+        volatility = annualized_volatility(asset_returns)
+        if max_dd <= 0 or volatility <= 0:
+            continue
+        if len(series) >= 253:
+            momentum = float(series[-22] / series[-253] - 1.0)
+        else:
+            momentum = capped_compound_return(series, min(120, len(series) - 1))
+        liquidity = 0.0
+        if price_data.amounts is not None:
+            amount_series = price_data.amounts[start_index : price_index + 1, index]
+            average_amount = mean_tail(amount_series, min(20, len(amount_series)))
+            liquidity = float(np.log1p(average_amount or 0.0))
+        valid_indices.append(index)
+        momentum_values.append(momentum)
+        low_vol_values.append(-volatility)
+        drawdown_values.append(-max_dd)
+        liquidity_values.append(liquidity)
+
+    momentum_z = zscore(np.array(momentum_values, dtype=float))
+    low_vol_z = zscore(np.array(low_vol_values, dtype=float))
+    drawdown_z = zscore(np.array(drawdown_values, dtype=float))
+    liquidity_z = zscore(np.array(liquidity_values, dtype=float))
+    legacy_scores = 0.35 * momentum_z + 0.25 * low_vol_z + 0.25 * drawdown_z + 0.15 * liquidity_z
+    expected_returns = 0.06 + 0.025 * legacy_scores
+    valid_covariance = shrink_covariance[np.ix_(valid_indices, valid_indices)]
+    valid_weights = drop_tiny_weights(max_sharpe_weights(expected_returns, valid_covariance, max_weight), max_weight=max_weight)
+
+    asset_by_symbol = {asset.symbol: asset for asset in assets}
+    ai_mask = np.array(
+        [asset_by_symbol.get(price_data.symbols[index], Asset(price_data.symbols[index], "", "", "")).ai_supply_chain for index in valid_indices],
+        dtype=bool,
+    )
+    if ai_tilt == "moderate":
+        valid_weights = drop_tiny_weights(apply_group_tilt(valid_weights, ai_mask, 0.33, 0.35, max_weight), max_weight=max_weight)
+    elif ai_tilt == "strong":
+        valid_weights = drop_tiny_weights(apply_group_tilt(valid_weights, ai_mask, 0.38, 0.40, max_weight), max_weight=max_weight)
+
+    weights = np.zeros(len(price_data.symbols), dtype=float)
+    for offset, index in enumerate(valid_indices):
+        weights[index] = valid_weights[offset]
+    return weights
+
+
+def strategy_structure_summary(
+    assets: list[Asset],
+    price_data: PriceData,
+    build_date: str,
+    shrink_covariance: np.ndarray,
+    ai_tilt: str = "moderate",
+) -> str:
+    legacy_weights = legacy_multi_factor_weights(assets, price_data, build_date, shrink_covariance, ai_tilt=ai_tilt)
+    expanded_weights, _, _, _, _ = multi_factor_shrink_weights(
+        assets=assets,
+        price_data=price_data,
+        build_date=build_date,
+        shrink_covariance=shrink_covariance,
+        issues=[],
+        ai_tilt=ai_tilt,
+    )
+    legacy_conc = concentration_metrics(legacy_weights)
+    expanded_conc = concentration_metrics(expanded_weights)
+    legacy_rc = risk_contribution(legacy_weights, shrink_covariance)
+    expanded_rc = risk_contribution(expanded_weights, shrink_covariance)
+    legacy_ai_group = next(
+        (
+            group
+            for group in aggregate_group_exposure(
+                assets,
+                price_data.symbols,
+                legacy_weights,
+                legacy_rc,
+                lambda asset: "AI 供应链" if asset and asset.ai_supply_chain else "非 AI 供应链",
+            )
+            if group["group"] == "AI 供应链"
+        ),
+        {"weight": 0.0, "risk": 0.0},
+    )
+    expanded_ai_group = next(
+        (
+            group
+            for group in aggregate_group_exposure(
+                assets,
+                price_data.symbols,
+                expanded_weights,
+                expanded_rc,
+                lambda asset: "AI 供应链" if asset and asset.ai_supply_chain else "非 AI 供应链",
+            )
+            if group["group"] == "AI 供应链"
+        ),
+        {"weight": 0.0, "risk": 0.0},
+    )
+    legacy_stress = stress_loss(legacy_weights, shrink_covariance)
+    expanded_stress = stress_loss(expanded_weights, shrink_covariance)
+    return (
+        "相较旧 4 因子，新扩展框架更分散："
+        f"HHI 从 {legacy_conc['hhi']:.4f} 降到 {expanded_conc['hhi']:.4f}，"
+        f"前三大权重从 {format_percent(legacy_conc['top3_weight'])} 降到 {format_percent(expanded_conc['top3_weight'])}，"
+        f"有效持仓数从 {legacy_conc['effective_n']:.2f} 升到 {expanded_conc['effective_n']:.2f}；"
+        f"AI 供应链权重从 {format_percent(float(legacy_ai_group['weight']))} 升到 {format_percent(float(expanded_ai_group['weight']))}，"
+        f"风险贡献从 {format_percent(float(legacy_ai_group['risk']))} 升到 {format_percent(float(expanded_ai_group['risk']))}；"
+        f"压力估计损失从 {format_percent(abs(legacy_stress))} 变为 {format_percent(abs(expanded_stress))}。"
+        "结论是组合更分散，但风险仍更偏向 AI 供应链。"
+    )
 
 
 def build_trade_signals(
@@ -1559,6 +1839,7 @@ def build_model_portfolio(
     analysis_start_date: str,
     analysis_end_date: str,
     method: str,
+    ai_tilt: str | None = None,
     invest_ratio: float = DEFAULT_MODEL_INVEST_RATIO,
     risk_metrics: dict[str, dict[str, float]] | None = None,
     lookback_years: int = MODEL_LOOKBACK_YEARS,
@@ -1636,6 +1917,11 @@ def build_model_portfolio(
                 annual_volatility=metrics.get("annual_volatility"),
                 drawdown_days=int(metrics["drawdown_days"]) if "drawdown_days" in metrics else None,
                 risk_score=metrics.get("risk_score"),
+                price_factor_score=metrics.get("price_factor_score"),
+                industry_ai_score=metrics.get("industry_ai_score"),
+                macro_external_score=metrics.get("macro_external_score"),
+                composite_score=metrics.get("composite_score"),
+                trend_strength_score=metrics.get("trend_strength_score"),
                 target_weight=target_weight,
                 target_value=target_value,
                 shares=shares,
@@ -1666,6 +1952,7 @@ def build_model_portfolio(
         execution_date=build_date,
         execution_price_status="ready" if execution_price_ready or execution_orders else "pending_open_price",
         method=method,
+        ai_tilt=ai_tilt,
         lookback_years=lookback_years,
         initial_cash=initial_cash,
         invest_ratio=invest_ratio,
@@ -1707,6 +1994,11 @@ def write_model_portfolio_csv(portfolio: ModelPortfolio, output_path: Path) -> N
                 "annual_volatility",
                 "drawdown_days",
                 "risk_score",
+                "price_factor_score",
+                "industry_ai_score",
+                "macro_external_score",
+                "composite_score",
+                "trend_strength_score",
                 "target_weight",
                 "target_value",
                 "shares",
@@ -1741,6 +2033,11 @@ def write_model_portfolio_csv(portfolio: ModelPortfolio, output_path: Path) -> N
                     "" if position.annual_volatility is None else f"{position.annual_volatility:.8f}",
                     "" if position.drawdown_days is None else position.drawdown_days,
                     "" if position.risk_score is None else f"{position.risk_score:.8f}",
+                    "" if position.price_factor_score is None else f"{position.price_factor_score:.8f}",
+                    "" if position.industry_ai_score is None else f"{position.industry_ai_score:.8f}",
+                    "" if position.macro_external_score is None else f"{position.macro_external_score:.8f}",
+                    "" if position.composite_score is None else f"{position.composite_score:.8f}",
+                    "" if position.trend_strength_score is None else f"{position.trend_strength_score:.8f}",
                     f"{position.target_weight:.8f}",
                     f"{position.target_value:.2f}",
                     "" if position.shares is None else position.shares,
@@ -1839,6 +2136,17 @@ def simulated_trade_file(trade_date: str, output_path: Path | None = None) -> Pa
     return ROOT / "data" / f"simulated_trades_{trade_date}.csv"
 
 
+def latest_simulated_trade_file(trade_date: str | None = None, output_path: Path | None = None) -> Path:
+    if output_path is not None:
+        return output_path
+    candidates = sorted(ROOT.glob("data/simulated_trades_*.csv"), key=lambda path: path.stat().st_mtime, reverse=True)
+    if candidates:
+        return candidates[0]
+    if trade_date:
+        return simulated_trade_file(trade_date)
+    return ROOT / "data" / "simulated_trades_latest.csv"
+
+
 def stable_simulated_trade_id(
     trade_date: str,
     build_date: str,
@@ -1870,7 +2178,7 @@ def legacy_simulated_trade_key(trade_date: str, symbol: str, action: str) -> str
 def load_simulated_trade_keys(trade_date: str | None, trade_path: Path | None = None) -> tuple[set[str], set[str]]:
     if not trade_date:
         return set(), set()
-    path = trade_path or simulated_trade_file(trade_date)
+    path = trade_path or latest_simulated_trade_file(trade_date)
     if not path.exists():
         return set(), set()
     trade_ids: set[str] = set()
@@ -1905,7 +2213,7 @@ def load_simulated_trade_batch_status(
 ) -> list[SimulatedTradeBatchStatus]:
     if not trade_date:
         return []
-    path = trade_path or simulated_trade_file(trade_date)
+    path = trade_path or latest_simulated_trade_file(trade_date)
     if not path.exists():
         return []
     grouped: dict[str, dict[str, object]] = {}
@@ -2105,6 +2413,54 @@ def load_model_market_values(path: Path) -> dict[str, dict[str, float]]:
     return market_values
 
 
+def append_market_snapshot_to_price_data(price_data: PriceData, market_values_path: Path | None, issues: list[DataIssue]) -> PriceData:
+    if not market_values_path or not market_values_path.exists():
+        return price_data
+    market_values = load_model_market_values(market_values_path)
+    if not market_values:
+        return price_data
+    market_date = str(next(iter(market_values.values())).get("market_date") or "")
+    if not market_date or (price_data.dates and market_date <= price_data.dates[-1]):
+        return price_data
+
+    prices: list[float] = []
+    volumes: list[float] = []
+    amounts: list[float] = []
+    missing: list[str] = []
+    for symbol in price_data.symbols:
+        mark = market_values.get(symbol)
+        price = float(mark.get("current_price") or 0.0) if mark else 0.0
+        if price <= 0:
+            missing.append(symbol)
+            break
+        prices.append(price)
+        volumes.append(float(mark.get("total_volume") or mark.get("volume") or 0.0))
+        amounts.append(float(mark.get("total_amount") or 0.0))
+    if missing:
+        issues.append(DataIssue("DAILY_MARKET", f"最新市值档 {market_values_path} 缺少 {missing[0]} 有效价格，未并入回测序列。"))
+        return price_data
+
+    appended_prices = np.vstack([price_data.prices, np.array(prices, dtype=float)])
+    appended_volumes = (
+        np.vstack([price_data.volumes, np.array(volumes, dtype=float)])
+        if price_data.volumes is not None
+        else np.array([volumes], dtype=float)
+    )
+    appended_amounts = (
+        np.vstack([price_data.amounts, np.array(amounts, dtype=float)])
+        if price_data.amounts is not None
+        else np.array([amounts], dtype=float)
+    )
+    issues.append(DataIssue("DAILY_MARKET", f"已将最新市值档 {market_values_path} 并入回测价格序列，最新日期 {market_date}。"))
+    return PriceData(
+        dates=[*price_data.dates, market_date],
+        symbols=price_data.symbols,
+        prices=appended_prices,
+        volumes=appended_volumes,
+        amounts=appended_amounts,
+    )
+
+
 def build_public_close_market_values(
     assets: list[Asset],
     execution_orders: dict[str, dict[str, float]],
@@ -2287,7 +2643,21 @@ def latest_market_values_path() -> Path | None:
     ]
     if not market_files:
         return None
-    return max(market_files, key=lambda path: path.stat().st_mtime)
+
+    def rank(path: Path) -> tuple[str, int, float]:
+        market_date = ""
+        market_mode = ""
+        try:
+            with path.open("r", encoding="utf-8-sig", newline="") as handle:
+                row = next(csv.DictReader(handle), {})
+                market_date = str(row.get("mark_date") or "")
+                market_mode = str(row.get("market_mode") or "")
+        except (OSError, StopIteration):
+            pass
+        mode_rank = 1 if market_mode == "close" else 0
+        return market_date, mode_rank, path.stat().st_mtime
+
+    return max(market_files, key=rank)
 
 
 def snapshot_field(snapshot: object, name: str, default: object = None) -> object:
@@ -2477,6 +2847,9 @@ def render_dashboard(
     corr = correlation_matrix(returns)
 
     chart_dates = price_data.dates[1:]
+    dashboard_data_start = price_data.dates[0] if price_data.dates else "无可用资料"
+    dashboard_data_end = price_data.dates[-1] if price_data.dates else "无可用资料"
+    dashboard_generated_date = date.today().isoformat()
     sample_curve = portfolio_curve(returns, sample_weights)
     shrink_curve = portfolio_curve(returns, shrink_weights)
     sample_dd = drawdown(sample_curve)
@@ -2665,6 +3038,15 @@ def render_dashboard(
         top_signal_items = "<li>本轮没有新的待确认调仓；持仓维持观察，等待价格、趋势、RSI 或连续天数重新触发。</li>"
         trade_reason_summary = "本轮没有新的待确认调仓；当前更适合观察风险集中、回撤和压力情境。"
         trade_reason_boundary = "没有待确认单不代表风险解除，只代表本轮没有标的同时满足买入/卖出阈值。"
+    strategy_structure_text = ""
+    if model_portfolio and model_portfolio.method == "multi-factor-shrink":
+        strategy_structure_text = strategy_structure_summary(
+            assets=assets,
+            price_data=price_data,
+            build_date=model_portfolio.build_date,
+            shrink_covariance=shrink_cov,
+            ai_tilt=model_portfolio.ai_tilt or "moderate",
+        )
     research_report_text = "\n".join(
         [
             "本轮研究摘要：",
@@ -2672,11 +3054,18 @@ def render_dashboard(
             f"2. 群组归因显示，{str(top_sector['group'])} 与 {str(top_theme['group'])} 是当前主要群组风险来源；AI 供应链权重 {format_percent(float(ai_group['weight']))}，风险贡献 {format_percent(float(ai_group['risk']))}，风险-权重差 {format_percent(ai_risk_gap, signed=True)}。",
             f"3. 压力情境下，普通协方差估计损失约 {format_percent(abs(sample_stress))}，收缩协方差估计损失约 {format_percent(abs(shrink_stress))}；该口径仅用于研究解释。",
             f"4. 调仓状态：{trade_reason_summary}",
-            "5. 本摘要仅用于本地模拟盘研究记录，不代表未来报酬预测、个股买卖建议、实盘订单或券商账户状态。",
+            f"5. 策略结构变化结论：{strategy_structure_text}" if strategy_structure_text else "5. 策略结构变化结论：当前模型盘尚未采用 multi-factor-shrink，暂不生成结构变化比较。",
+            "6. 本摘要仅用于本地模拟盘研究记录，不代表未来报酬预测、个股买卖建议、实盘订单或券商账户状态。",
         ]
     )
+    strategy_structure_html = ""
+    if strategy_structure_text:
+        strategy_structure_html = f"""
+        <div class="analysis-note"><b>策略结构变化结论：</b>{html.escape(strategy_structure_text)}</div>
+"""
     research_report_html = f"""
         <div class="analysis-note"><b>群组风险研究报告摘要：</b>以下文字用于研究记录和人工复核，可复制到报告或 Obsidian；内容只解释本地模型盘与风险归因，不构成投资建议、预测或券商委托；不会新增交易信号，不会写入模拟成交 CSV，也不连接券商。</div>
+        {strategy_structure_html}
         <textarea class="research-report" readonly rows="7">{html.escape(research_report_text)}</textarea>
 """
     decision_summary_html = f"""
@@ -2719,6 +3108,14 @@ def render_dashboard(
     if backtest:
         sample_bt = backtest.sample_metrics
         shrink_bt = backtest.shrink_metrics
+        backtest_start_date = backtest.dates[0] if backtest.dates else "无可用资料"
+        backtest_end_date = backtest.dates[-1] if backtest.dates else "无可用资料"
+        last_rebalance_date = backtest.rebalance_dates[-1] if backtest.rebalance_dates else "无调仓记录"
+        next_rebalance_note = (
+            f"回测曲线已纳入 {backtest_end_date}，但 7 个交易日调仓节奏下，最后一次重新计算权重发生在 {last_rebalance_date}。"
+            if backtest_end_date != last_rebalance_date
+            else f"回测曲线与最后一次重新计算权重都更新到 {backtest_end_date}。"
+        )
         turnover_delta = shrink_bt.average_turnover - sample_bt.average_turnover
         drawdown_improvement = shrink_bt.max_drawdown - sample_bt.max_drawdown
         backtest_leader = "收缩协方差" if backtest.shrink_curve[-1] >= backtest.sample_curve[-1] else "普通协方差"
@@ -2731,9 +3128,12 @@ def render_dashboard(
         backtest_html = f"""
     <section class="section panel">
       <h2>滚动再平衡回测</h2>
-      <p>使用 {backtest.window} 个交易日估计窗口，每 {backtest.step} 个交易日重新计算一次最小方差权重，共执行 {backtest.rebalance_count} 次调仓。这个区块用于观察权重在时间中是否稳定，而不是只看单期优化结果。</p>
+      <p>使用 {backtest.window} 个交易日估计窗口，每 {backtest.step} 个交易日重新计算一次最小方差权重，共执行 {backtest.rebalance_count} 次调仓。回测覆盖区间为 {backtest_start_date} 至 {backtest_end_date}；最后一次重新计算权重日期为 {last_rebalance_date}。</p>
+      <div class="analysis-note"><b>滚动更新记录：</b>{html.escape(next_rebalance_note)}如果最新行情只补进 1 个交易日、还没走满 7 个交易日，就会更新净值曲线与行情日期，但调仓次数不会增加。</div>
       <div class="analysis-note"><b>回测对比建议：</b>{html.escape(backtest_advice)}</div>
       <div class="metric-grid backtest-grid">
+        <div class="card"><div class="metric">{html.escape(backtest_end_date)}</div><p class="metric-label">回测最新日期</p></div>
+        <div class="card"><div class="metric">{html.escape(last_rebalance_date)}</div><p class="metric-label">最后调仓日期</p></div>
         <div class="card"><div class="metric">{format_percent(sample_bt.annual_return)}</div><p class="metric-label">普通协方差年化收益</p></div>
         <div class="card"><div class="metric hero-stat">{format_percent(shrink_bt.annual_return)}</div><p class="metric-label">收缩协方差年化收益</p></div>
         <div class="card"><div class="metric stress-number">{format_percent(sample_bt.max_drawdown)}</div><p class="metric-label">普通协方差最大回撤</p></div>
@@ -2764,7 +3164,7 @@ def render_dashboard(
             signal_status_text += f" / {settled_signal_count} 笔已落账"
         signal_rows = "\n".join(
             (
-                f"<tr class=\"signal-{html.escape(signal.status)}\"><td><span class=\"signal-pill {html.escape(signal.status)}\">{html.escape(signal.action)}</span></td>"
+                f"<tr class=\"signal-{html.escape(signal.status)}\" data-trade-id=\"{html.escape(signal.trade_id)}\"><td><span class=\"signal-pill {html.escape(signal.status)}\">{html.escape(signal.action)}</span></td>"
                 f"<td>{html.escape(signal.symbol)}</td><td class=\"name-cell\"><span class=\"asset-name\">{html.escape(signal.name)}</span></td><td>{signal.latest_price:.2f}</td>"
                 f"<td>{format_optional_price(signal.cost_price)}</td><td>{format_optional_price(signal.ma20)}</td><td>{format_optional_price(signal.ma60)}</td>"
                 f"<td>{'' if signal.rsi14 is None else f'{signal.rsi14:.1f}'}</td>"
@@ -2896,7 +3296,7 @@ def render_dashboard(
         <thead><tr><th>代码</th><th>名称</th><th>建仓价</th><th>当前价</th><th>持仓股数</th><th>买入市值</th><th>当前市值</th><th>未实现盈亏</th><th>盈亏率</th><th>目标权重</th><th>目标金额</th><th>买进手续费</th></tr></thead>
         <tbody>{model_rows}</tbody>
       </table>
-      <p class="footer-note">策略分析区间：{model_portfolio.analysis_start_date} 至 {model_portfolio.analysis_end_date}。模型盘 CSV 已输出到 {html.escape(str(model_portfolio.output_path))} 与 {html.escape(str(model_portfolio.dated_output_path))}。这是研究用途的 paper portfolio；持仓、盈亏和建议单都只属于本地模拟盘，不构成投资建议，也不是券商委托状态。</p>
+      <p class="footer-note">模型建仓分析区间：{model_portfolio.analysis_start_date} 至 {model_portfolio.analysis_end_date}；当前回测/行情序列最新日期：{dashboard_data_end}。模型盘 CSV 已输出到 {html.escape(str(model_portfolio.output_path))} 与 {html.escape(str(model_portfolio.dated_output_path))}。这是研究用途的 paper portfolio；持仓、盈亏和建议单都只属于本地模拟盘，不构成投资建议，也不是券商委托状态。</p>
     </section>
 {manual_trade_html}
 """
@@ -3439,9 +3839,11 @@ def render_dashboard(
       <div class="topbar">
         <div class="title-block">
           <h1>【Codex】台灣股市投資量化模型</h1>
-          <p>用 2024-01-02 至 2026-06-02 的台股资料，连接风险分析、模型盘建仓与调仓节奏。</p>
+          <p>今日 Dashboard 更新日期：{html.escape(dashboard_generated_date)}；行情/回测序列最新日期：{html.escape(dashboard_data_end)}。用 {html.escape(dashboard_data_start)} 至 {html.escape(dashboard_data_end)} 的台股资料，连接风险分析、模型盘建仓与调仓节奏。</p>
         </div>
         <div class="top-actions">
+          <span>今日更新 {html.escape(dashboard_generated_date)}</span>
+          <span>行情最新 {html.escape(dashboard_data_end)}</span>
           <span>估计窗口 {backtest.window if backtest else DEFAULT_REBALANCE_WINDOW} 日</span>
           <span>调仓间隔 {backtest.step if backtest else DEFAULT_REBALANCE_STEP} 日</span>
           <button id="execution-check-button" class="action-button" type="button" aria-expanded="false" aria-controls="execution-check">手动执行检查</button>
@@ -3573,13 +3975,15 @@ def render_dashboard(
       const setTradeStatus = (tradeId, done) => {{
         const status = document.querySelector(`[data-trade-status="${{tradeId}}"]`);
         const toggle = document.querySelector(`[data-trade-toggle="${{tradeId}}"]`);
-        const row = document.querySelector(`tr[data-trade-id="${{tradeId}}"]`);
         if (!status || !toggle) return;
         status.textContent = done ? "页面已确认" : "待确认";
         status.classList.toggle("done", done);
         toggle.textContent = done ? "改回待确认" : "页面标记已确认";
         toggle.classList.toggle("done", done);
-        if (row) row.classList.toggle("trade-done", done);
+        document.querySelectorAll(`tr[data-trade-id="${{tradeId}}"]`).forEach((row) => {{
+          row.classList.toggle("trade-done", done);
+          row.hidden = done;
+        }});
       }};
       const applyTradeState = () => {{
         const state = readState();
@@ -3642,6 +4046,8 @@ def main() -> None:
         offline_cache=args.offline_cache,
         data_source=args.data_source,
     )
+    snapshot_path = args.model_market_values or latest_market_values_path()
+    price_data = append_market_snapshot_to_price_data(price_data, snapshot_path, issues)
     returns = simple_returns(price_data.prices)
 
     sample_cov = covariance_matrix(returns)
@@ -3697,7 +4103,12 @@ def main() -> None:
                 issues.append(
                     DataIssue(
                         "MODEL_PORTFOLIO",
-                        f"模型盘使用台股多因子收缩优化：{model_analysis_start} 至 {model_analysis_end}；因子为动量、低波、回撤防御和流动性；AI 倾斜为 {args.ai_tilt}。",
+                        (
+                            f"模型盘使用台股多层多因子收缩优化：{model_analysis_start} 至 {model_analysis_end}；"
+                            "价格层因子为动量、低波、回撤防御、流动性与趋势强度；"
+                            "代理层因子为行业/主题相对强弱、AI 产业暴露、资金流代理与风险偏好代理；"
+                            f"AI 倾斜为 {args.ai_tilt}。"
+                        ),
                     )
                 )
             else:
@@ -3761,6 +4172,7 @@ def main() -> None:
                 analysis_start_date=model_analysis_start,
                 analysis_end_date=model_analysis_end,
                 method=args.model_method,
+                ai_tilt=args.ai_tilt,
                 invest_ratio=args.model_invest_ratio,
                 risk_metrics=model_metrics,
                 lookback_years=model_lookback_years,
@@ -3797,6 +4209,7 @@ def main() -> None:
                     analysis_start_date=model_analysis_start,
                     analysis_end_date=model_analysis_end,
                     method=args.model_method,
+                    ai_tilt=args.ai_tilt,
                     invest_ratio=args.model_invest_ratio,
                     risk_metrics=model_metrics,
                     lookback_years=model_lookback_years,

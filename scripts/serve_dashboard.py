@@ -44,6 +44,7 @@ DEFAULT_REBUILD_COMMAND = [
     "public-close",
     "--market-mode",
     "close",
+    "--execute-simulated-trades",
 ]
 
 

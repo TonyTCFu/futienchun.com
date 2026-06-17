@@ -34,7 +34,8 @@
 | 23. 第十九轮 QA 摘要文件输出 | complete | QA/Reviewer | 为本地 QA 汇总新增 `/tmp` 摘要文件输出，保留默认/较快模式并记录正式产物 hash |
 | 24. 第二十轮 QA JSON 摘要输出 | complete | QA/Reviewer | 为本地 QA 汇总新增机器可读 JSON 摘要，便于自动巡检与多 agent 汇总 |
 | 25. 第二十一轮关键数字回归检查 | complete | QA/Reviewer | 新增研究摘要关键数字回归检查，并接入本地 QA 汇总 |
-| 26. 第二十二轮公网部署与每日重建 | in_progress | Coordinator + Dashboard/Product + Data Pipeline | 将 Dashboard 挂到公网，并按固定时间自动用公开收盘价重建 |
+| 26. 第二十二轮公网部署与每日重建 | complete | Coordinator + Dashboard/Product + Data Pipeline | 将 Dashboard 挂到公网，并按固定时间自动用公开收盘价重建 |
+| 27. 第二十三轮公网免费实例上线 | complete | Coordinator + Dashboard/Product | 以免费实例公开上线 Dashboard，先满足公网读取，再视稳定性决定是否升级 |
 
 ## Team Blueprint
 
@@ -133,8 +134,9 @@
 22. 第二十轮已完成：本地 QA 汇总现可额外写出 `/tmp` JSON 摘要，方便后续自动巡检与多 agent 汇总。
 23. 我判断 QA 汇总闭环目前已够用：已有单命令执行、默认/较快双模式、人工可读 Markdown 摘要、机器可读 JSON 摘要，以及正式产物 hash 守门。
 24. 第二十一轮已完成：研究摘要关键数字回归检查已接入本地 QA 汇总，默认/较快两条路径都覆盖。
-25. 第二十二轮进行中：公网服务入口与每日定时重建已开始落地，目标是把 Dashboard 挂到公网并避免继续依赖固定旧市值档。
-26. 若继续下一轮，建议优先扩展更多只读检查项，例如摘要趋势比较或页面关键文案回归。
+25. 第二十二轮已完成：公网服务入口与每日定时重建已落地，目标是把 Dashboard 挂到公网并避免继续依赖固定旧市值档。
+26. 第二十三轮已完成：公网服务已先用 Render 免费实例上线，公网地址可直接读取，后续仅需视稳定性决定是否升级付费档。
+27. 若继续下一轮，建议优先扩展更多只读检查项，例如摘要趋势比较或页面关键文案回归。
 
 ## Errors Encountered
 

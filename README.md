@@ -123,7 +123,13 @@ python src/risk_dashboard.py --rebalance-window 80 --rebalance-step 20
 python src/risk_dashboard.py --data-source shioaji --start 2021-06 --end 2026-06 --model-portfolio --model-build-date 2026-06-03 --model-method drawdown-risk
 ```
 
-也可以使用台股多因子收缩优化模型。这个方法只使用现有价格、成交金额和风险序列，不额外读取基本面资料；因子包含中期动量、低波动、回撤防御与流动性，并把因子分数映射成保守预期收益，再搭配 Ledoit-Wolf 收缩协方差求解仅做多、单一资产上限 25% 的目标权重：
+也可以使用台股多因子收缩优化模型。当前第一轮正式版本采用三层框架：
+
+- 价格层：中期动量、低波动、回撤防御、流动性、趋势强度
+- 代理产业层：行业/主题相对强弱、AI 产业暴露
+- 代理外部层：资金流代理、风险偏好代理
+
+第一轮仍只使用仓库内现有价格、成交金额、行业/主题与 AI 分类，不直接抓外部 API；后续可把汇率、真实资金流、产业外部指标与社交媒体情绪按同一接口逐步替换代理项。当前分数会先映射成保守预期收益，再搭配 Ledoit-Wolf 收缩协方差求解仅做多、单一资产上限 25% 的目标权重：
 
 ```bash
 python src/risk_dashboard.py --start 2024-01 --end 2026-06 --offline-cache --model-portfolio --model-build-date 2026-06-03 --model-method multi-factor-shrink
@@ -135,7 +141,29 @@ python src/risk_dashboard.py --start 2024-01 --end 2026-06 --offline-cache --mod
 python src/risk_dashboard.py --start 2024-01 --end 2026-06 --offline-cache --model-portfolio --model-build-date 2026-06-03 --model-method multi-factor-shrink --ai-tilt moderate
 ```
 
-基本面质量与价值因子暂未纳入正式权重，因为当前项目还没有稳定的 ROE、本益比、股价净值比或殖利率数据源；后续补齐数据源后，可把质量和价值并入多因子分数。
+基本面质量与价值因子暂未纳入正式权重，因为当前项目还没有稳定的 ROE、本益比、股价净值比或殖利率数据源；后续补齐数据源后，可把质量和价值并入多因子分数。第一轮新增的模型盘 CSV 会额外写出 `price_factor_score`、`industry_ai_score`、`macro_external_score`、`composite_score` 与 `trend_strength_score`，方便比较扩因子前后的权重变化与解释性。
+
+若要直接比较“旧 4 因子”与“新扩展框架”的权重差异，可运行只读比较脚本。该脚本只读取本地缓存与资产池，不会覆盖正式 Dashboard、正式模型盘或模拟盘 CSV；默认把比较摘要写到 `/tmp`：
+
+```bash
+python scripts/compare_multi_factor_profiles.py
+```
+
+执行后会输出：
+
+- `/tmp/tw_quant_factor_profile_compare.md`
+- `/tmp/tw_quant_factor_profile_compare.json`
+
+其中会列出旧/新框架的权重合计、单一资产上限、AI 群组权重，以及 `0050`、`2412`、`00881`、`2330`、`2317`、`2454`、`2303` 等重点标的权重变化。
+新版比较摘要还会额外输出：
+
+- 集中度变化：HHI、有效持仓数、前三大权重合计、活跃持仓数
+- 权重变化最大标的
+- 行业暴露变化
+- 主题暴露变化
+- AI / 非 AI 暴露变化
+- 行业 / 主题 / AI 的风险贡献变化
+- 压力情境变化与高相关重叠变化
 
 每日行情更新使用 Shioaji snapshot，只读取行情，不呼叫下单 API。盘中刷新会生成 `_intraday` 市值檔并在仪表盘标示“盘中暂估”；收盘定稿会生成正式市值檔并标示“收盘定稿”：
 
@@ -228,7 +256,7 @@ python scripts/serve_dashboard.py --host 0.0.0.0 --port 8000
 
 仪表盘中的“模拟盘调仓确认”区块只显示未来新的待确认买入或卖出建议。2026-06-03 初始建仓单按虚拟盘成交口径视为已执行，不再作为待处理订单显示；对应持仓数量、成本和盈亏会在“今日持仓与收盘盈亏”区块展示。页面按钮只更新当前浏览器的本地状态，不会连接券商、不具备真实交易能力。每笔待确认建议会显示一个稳定单号（`trade_id`），用于对齐页面复核、脚本落账和本地模拟成交 CSV；单号不包含价格、股数、中文原因或任何券商凭证。
 
-若要把本轮建议单真正落入模拟盘，使用 `--execute-simulated-trades`。脚本会写入 `data/simulated_trades_交易日.csv`，并更新 `data/simulated_positions_latest.csv` 与 `data/simulated_positions_交易日.csv`；后续仪表盘会优先读取最新模拟持仓，而不是重复使用初始建仓单。新写入的模拟成交 CSV 会包含 `trade_id` 欄位；旧 CSV 没有此栏位时，脚本仍会用交易日、标的和方向做兼容去重。
+若要把本轮建议单真正落入模拟盘，使用 `--execute-simulated-trades`。脚本会写入 `data/simulated_trades_交易日.csv`，并更新 `data/simulated_positions_latest.csv` 与 `data/simulated_positions_交易日.csv`；后续仪表盘会优先读取最新模拟持仓，而不是重复使用初始建仓单。新写入的模拟成交 CSV 会包含 `trade_id` 欄位；旧 CSV 没有此栏位时，脚本仍会用交易日、标的和方向做兼容去重。现在每日收盘后的自动重建流程也会带上这个开关，所以 Dashboard 会同步刷新持仓、执行状态与研究说明区。
 
 默认行为是幂等落账：未指定批次时，模拟成交批次视为 `01`；同一交易日、同一标的、同一方向、同一触发规则重复执行，不会重复写入成交，也不会再次减少持仓。若确实需要同日分批，必须明确指定新的批次号，例如 `--simulated-trade-batch-seq 02`、`03`，并在交接中说明这是人为确认的第二批或第三批模拟成交；不要用分批绕过重复落账保护。
 
