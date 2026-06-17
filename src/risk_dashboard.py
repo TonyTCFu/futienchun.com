@@ -9,7 +9,7 @@ import json
 import math
 import sys
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Iterable
 
@@ -184,6 +184,17 @@ class SimulatedTradeBatchStatus:
     symbols: tuple[str, ...]
     actions: tuple[str, ...]
     is_legacy: bool
+
+
+@dataclass(frozen=True)
+class SimulatedTradeExecutionSummary:
+    trade_date: str
+    trade_count: int
+    buy_count: int
+    sell_count: int
+    symbols: tuple[str, ...]
+    details: tuple[str, ...]
+    source_path: Path | None
 
 
 @dataclass(frozen=True)
@@ -2259,6 +2270,59 @@ def load_simulated_trade_batch_status(
     return sorted(statuses, key=lambda item: (item.is_legacy, item.batch_seq))
 
 
+def load_simulated_trade_execution_summary(
+    trade_date: str | None,
+    trade_path: Path | None = None,
+) -> SimulatedTradeExecutionSummary | None:
+    path = trade_path or latest_simulated_trade_file(trade_date)
+    if not path.exists():
+        return None
+    rows: list[dict[str, str]] = []
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            if (row.get("status") or "").strip().lower() == "executed":
+                rows.append(row)
+    if not rows:
+        return None
+    row_trade_dates = sorted({(row.get("trade_date") or "").strip() for row in rows if (row.get("trade_date") or "").strip()})
+    summary_trade_date = row_trade_dates[-1] if row_trade_dates else (trade_date or "")
+    buy_count = sum(1 for row in rows if (row.get("action") or "").strip().lower() == "buy")
+    sell_count = sum(1 for row in rows if (row.get("action") or "").strip().lower() == "sell")
+    symbols = tuple(sorted({(row.get("symbol") or "").strip() for row in rows if (row.get("symbol") or "").strip()}))
+    details = tuple(
+        f"{(row.get('symbol') or '').strip()} {('买入' if (row.get('action') or '').strip().lower() == 'buy' else '卖出')} {(row.get('shares') or '').strip()} 股"
+        for row in rows
+        if (row.get("symbol") or "").strip()
+    )
+    return SimulatedTradeExecutionSummary(
+        trade_date=summary_trade_date,
+        trade_count=len(rows),
+        buy_count=buy_count,
+        sell_count=sell_count,
+        symbols=symbols,
+        details=details,
+        source_path=path,
+    )
+
+
+def parse_iso_date(value: str) -> date | None:
+    try:
+        return date.fromisoformat(value)
+    except Exception:
+        return None
+
+
+def add_weekdays(start: date, count: int) -> date:
+    current = start
+    remaining = max(0, count)
+    while remaining > 0:
+        current += timedelta(days=1)
+        if current.weekday() < 5:
+            remaining -= 1
+    return current
+
+
 def write_simulated_trades(
     portfolio: ModelPortfolio,
     signals: list[TradeSignal],
@@ -2980,6 +3044,23 @@ def render_dashboard(
         f"回撤曲线当前由{dd_leader}表现较稳，普通最大回撤 {format_percent(sample_dd.min())}、收缩最大回撤 {format_percent(shrink_dd.min())}。"
         "若收缩模型回撤较浅，说明稳健协方差对风险控制有帮助；若较深，需要降低单一风险贡献。"
     )
+    backtest_start_date = "无可用资料"
+    backtest_end_date = "无可用资料"
+    last_rebalance_date = "无调仓记录"
+    estimated_next_rebalance_date = "无可用资料"
+    trading_days_to_next_rebalance = 0
+    if backtest:
+        backtest_start_date = backtest.dates[0] if backtest.dates else backtest_start_date
+        backtest_end_date = backtest.dates[-1] if backtest.dates else backtest_end_date
+        last_rebalance_date = backtest.rebalance_dates[-1] if backtest.rebalance_dates else last_rebalance_date
+        trading_days_after_rebalance = sum(1 for item in backtest.dates if item > last_rebalance_date)
+        trading_days_to_next_rebalance = max(0, backtest.step - trading_days_after_rebalance)
+        parsed_backtest_end = parse_iso_date(backtest_end_date)
+        estimated_next_rebalance_date = (
+            add_weekdays(parsed_backtest_end, trading_days_to_next_rebalance).isoformat()
+            if parsed_backtest_end and trading_days_to_next_rebalance
+            else "下一个共同交易日"
+        )
     actionable_buy_count = sum(1 for signal in actionable_signals if signal.status == "buy")
     actionable_sell_count = sum(1 for signal in actionable_signals if signal.status == "sell")
     settled_signal_count = sum(1 for signal in trade_signals if "已落账" in signal.reason)
@@ -2987,6 +3068,15 @@ def render_dashboard(
         (model_portfolio.market_date or model_portfolio.execution_date) if model_portfolio else None,
         trade_output_path,
     )
+    execution_summary = load_simulated_trade_execution_summary(
+        (model_portfolio.market_date or model_portfolio.execution_date) if model_portfolio else None,
+        trade_output_path,
+    )
+    execution_detail_text = "、".join(execution_summary.details) if execution_summary else "本轮尚无已落账模拟成交"
+    execution_trade_date = execution_summary.trade_date if execution_summary else "无执行记录"
+    execution_trade_count = execution_summary.trade_count if execution_summary else 0
+    execution_buy_count = execution_summary.buy_count if execution_summary else 0
+    execution_sell_count = execution_summary.sell_count if execution_summary else 0
     settled_batch_labels = "、".join(status.label for status in trade_batch_statuses if not status.is_legacy) or "暫無新格式批次"
     legacy_batch_status = next((status for status in trade_batch_statuses if status.is_legacy), None)
     legacy_batch_text = f"舊格式 {legacy_batch_status.trade_count} 筆" if legacy_batch_status else "無舊格式紀錄"
@@ -3038,6 +3128,27 @@ def render_dashboard(
         top_signal_items = "<li>本轮没有新的待确认调仓；持仓维持观察，等待价格、趋势、RSI 或连续天数重新触发。</li>"
         trade_reason_summary = "本轮没有新的待确认调仓；当前更适合观察风险集中、回撤和压力情境。"
         trade_reason_boundary = "没有待确认单不代表风险解除，只代表本轮没有标的同时满足买入/卖出阈值。"
+    rebalance_execution_calendar_html = f"""
+      <section id="rebalance-calendar" class="section panel">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Rebalance Calendar</span>
+            <h2>调仓与执行日历</h2>
+          </div>
+          <span class="status-pill">回测调仓 / 模拟盘执行分开记录</span>
+        </div>
+        <div class="analysis-note"><b>口径说明：</b>“回测调仓”是模型每 {backtest.step if backtest else DEFAULT_REBALANCE_STEP} 个共同交易日重新计算一次权重；“模拟盘执行调仓”是本地 paper portfolio 已经写入模拟成交 CSV 的买卖动作。你今天执行的卖出计入模拟盘执行调仓，但不会强行改写回测模型的 7 日重新估计节奏。</div>
+        <div class="metric-grid backtest-grid">
+          <div class="card"><div class="metric">{html.escape(last_rebalance_date)}</div><p class="metric-label">最后回测调仓日</p></div>
+          <div class="card"><div class="metric">{html.escape(estimated_next_rebalance_date)}</div><p class="metric-label">预计下次回测调仓</p></div>
+          <div class="card"><div class="metric">{trading_days_to_next_rebalance}</div><p class="metric-label">距下次还差交易日</p></div>
+          <div class="card"><div class="metric">{html.escape(execution_trade_date)}</div><p class="metric-label">最后模拟盘执行日</p></div>
+          <div class="card"><div class="metric">{execution_trade_count}</div><p class="metric-label">已落账模拟成交</p></div>
+          <div class="card"><div class="metric">{execution_sell_count}</div><p class="metric-label">其中卖出笔数</p></div>
+        </div>
+        <div class="analysis-note"><b>本次执行记录：</b>{html.escape(execution_detail_text)}。买入 {execution_buy_count} 笔、卖出 {execution_sell_count} 笔；这些都只属于本地模拟盘，不是券商委托。</div>
+      </section>
+"""
     strategy_structure_text = ""
     if model_portfolio and model_portfolio.method == "multi-factor-shrink":
         strategy_structure_text = strategy_structure_summary(
@@ -3108,11 +3219,13 @@ def render_dashboard(
     if backtest:
         sample_bt = backtest.sample_metrics
         shrink_bt = backtest.shrink_metrics
-        backtest_start_date = backtest.dates[0] if backtest.dates else "无可用资料"
-        backtest_end_date = backtest.dates[-1] if backtest.dates else "无可用资料"
-        last_rebalance_date = backtest.rebalance_dates[-1] if backtest.rebalance_dates else "无调仓记录"
+        next_rebalance_text = (
+            f"还差 {trading_days_to_next_rebalance} 个共同交易日；若无休市，最早约 {estimated_next_rebalance_date}"
+            if trading_days_to_next_rebalance
+            else "下一笔共同交易日即可触发新一轮调仓"
+        )
         next_rebalance_note = (
-            f"回测曲线已纳入 {backtest_end_date}，但 7 个交易日调仓节奏下，最后一次重新计算权重发生在 {last_rebalance_date}。"
+            f"回测曲线已纳入 {backtest_end_date}，但 7 个交易日调仓节奏下，最后一次重新计算权重发生在 {last_rebalance_date}；距离下一次重新计算权重{next_rebalance_text}。"
             if backtest_end_date != last_rebalance_date
             else f"回测曲线与最后一次重新计算权重都更新到 {backtest_end_date}。"
         )
@@ -3134,6 +3247,8 @@ def render_dashboard(
       <div class="metric-grid backtest-grid">
         <div class="card"><div class="metric">{html.escape(backtest_end_date)}</div><p class="metric-label">回测最新日期</p></div>
         <div class="card"><div class="metric">{html.escape(last_rebalance_date)}</div><p class="metric-label">最后调仓日期</p></div>
+        <div class="card"><div class="metric">{html.escape(estimated_next_rebalance_date)}</div><p class="metric-label">预计下次回测调仓</p></div>
+        <div class="card"><div class="metric">{trading_days_to_next_rebalance}</div><p class="metric-label">距下次还差交易日</p></div>
         <div class="card"><div class="metric">{format_percent(sample_bt.annual_return)}</div><p class="metric-label">普通协方差年化收益</p></div>
         <div class="card"><div class="metric hero-stat">{format_percent(shrink_bt.annual_return)}</div><p class="metric-label">收缩协方差年化收益</p></div>
         <div class="card"><div class="metric stress-number">{format_percent(sample_bt.max_drawdown)}</div><p class="metric-label">普通协方差最大回撤</p></div>
@@ -3830,6 +3945,7 @@ def render_dashboard(
       <a class="nav-item active" href="#risk-map"><span class="nav-icon">▦</span><span>風險</span></a>
       <a class="nav-item" href="#backtest"><span class="nav-icon">↻</span><span>回測</span></a>
       <a class="nav-item" href="#model"><span class="nav-icon">◎</span><span>建倉</span></a>
+      <a class="nav-item" href="#rebalance-calendar"><span class="nav-icon">◇</span><span>日曆</span></a>
       <a class="nav-item" href="#trade-signals"><span class="nav-icon">⌁</span><span>訊號</span></a>
       <a class="nav-item" href="#manual-trading"><span class="nav-icon">▣</span><span>交易</span></a>
       <a class="nav-item" href="#orders"><span class="nav-icon">☑</span><span>執行</span></a>
@@ -3873,6 +3989,8 @@ def render_dashboard(
       </section>
 
 {model_html}
+
+{rebalance_execution_calendar_html}
 
 {trade_signal_html}
 
