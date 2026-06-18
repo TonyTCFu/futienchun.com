@@ -1,5 +1,49 @@
 # Loop Engineering Progress
 
+## 2026-06-18
+
+### Session Goal
+
+按每日收盘自动化流程重建正式 Dashboard、复核模拟盘状态、恢复本地 QA 基线，并准备推送到公网。
+
+### Actions
+
+- 已读取 `AGENTS.md`、`task_plan.md`、`findings.md`、`progress.md`、`.codex/PROJECT_CONTEXT.md`、`README.md`，并确认今日任务继续沿用只读行情与本地模拟盘边界。
+- 已执行正式收盘重建命令：`./.venv/bin/python src/risk_dashboard.py --start 2024-01 --end 2026-06 --offline-cache --data-source twse --model-portfolio --model-build-date 2026-06-03 --model-invest-ratio 0.75 --model-method multi-factor-shrink --ai-tilt moderate --market-source public-close --market-mode close --execute-simulated-trades`。
+- 本轮重建成功刷新 `dashboard/index.html`，并重新写出 `data/model_portfolio_market_2026-06-16.csv` 与 `data/model_portfolio_market_2026-06-16_summary.txt`；正式页面更新日期变为 `2026-06-18`，但当前可并入的行情/回测序列最新日期仍为 `2026-06-16`。
+- `SIMULATED_TRADES` 继续保持幂等：本轮新增模拟成交 `0` 笔，`data/simulated_trades_2026-06-16.csv` 仍为既有 2 笔卖出，`data/simulated_positions_latest.csv` 更新时间刷新但持仓仍为 15 檔。
+- 已核对 Dashboard 的“调仓与执行日历”：最后回测调仓日 `2026-05-28`，预计下次回测调仓 `2026-06-19`，距下次还差 `3` 个共同交易日；最后模拟盘执行日仍为 `2026-06-16`。
+- 已核对策略监控表中 `2317`、`1301` 继续显示为“观察”，理由为“本日模拟调仓已落账”；页面中不再存在红色 `signal-pill sell` 残留。
+- 本轮发现本地 QA 基线已随正式 Dashboard 漂移：研究摘要同步检查、关键数字回归检查和 Markdown 导出检查都仍写死旧的 `33.00% / 48.49% / +15.49%`。
+- 已最小同步 QA 基线：更新 `scripts/validate_research_brief_sync.py`、`scripts/validate_research_brief_metrics.py`、`scripts/run_local_qa_checks.py` 到今日正式 Dashboard 的 `34.61% / 49.97% / +15.37%`，并把 iCloud Obsidian `台股量化基金.md` 的“最新研究摘要”同步到今日口径。
+
+### Verification Log
+
+- `./.venv/bin/python -m py_compile src/risk_dashboard.py scripts/serve_dashboard.py` 通过。
+- 正式重建完成：`/usr/bin/time -p` 实测 `real 15.03`，成功生成正式 `dashboard/index.html`。
+- 页面检索通过：`今日 Dashboard 更新日期：2026-06-18`、`行情/回测序列最新日期：2026-06-16`、`DAILY_MARKET` 记录命中 `data/model_portfolio_market_2026-06-16.csv`、`SIMULATED_TRADES: 已落账模拟成交 0 笔`。
+- HTML 只读核对通过：`signal-pill sell` 无命中；`2317`、`1301` 在策略监控表中均为“观察”，并显示“本日模拟调仓已落账，当前不再列为待确认清单。”
+- `./.venv/bin/python scripts/validate_research_brief_sync.py` 通过。
+- `./.venv/bin/python scripts/validate_research_brief_metrics.py` 通过，当前关键数字为 `AI 供应链权重 34.61%`、`风险贡献 49.97%`、`风险-权重差 +15.37%`、`trade_count=2`。
+- `./.venv/bin/python scripts/run_local_qa_checks.py` 通过，输出 `/tmp/tw_quant_local_qa_summary.md` 与 `/tmp/tw_quant_local_qa_summary.json`，并确认 6 个正式监控文件 hash 前后一致。
+
+### Files Changed
+
+- `dashboard/index.html`
+- `data/model_portfolio_market_2026-06-16.csv`
+- `data/model_portfolio_market_2026-06-16_summary.txt`
+- `data/simulated_positions_latest.csv`
+- `scripts/validate_research_brief_sync.py`
+- `scripts/validate_research_brief_metrics.py`
+- `scripts/run_local_qa_checks.py`
+- `findings.md`
+- `progress.md`
+- `.codex/PROJECT_CONTEXT.md`
+
+### Next Loop Recommendation
+
+- 继续每日自动化时，优先观察公开收盘价路径何时能把 `2026-06-18` 正式收盘序列并入回测；若仍停在 `2026-06-16`，需把原因明确记为数据新鲜度限制，而不是部署失败。
+
 ## 2026-06-17
 
 ### Session Goal
