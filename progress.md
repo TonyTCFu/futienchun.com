@@ -1,5 +1,53 @@
 # Loop Engineering Progress
 
+## 2026-06-20
+
+### Session Goal
+
+继续处理两件事：查清 `public-close` 为什么一直停在 `2026-06-16`，并把 Dashboard 里已经过期的“预计下次回测调仓”提示修成真实口径；若数据能补齐，则顺带完成正式重建、模拟盘落账与 QA 闭环。
+
+### Actions
+
+- 已读取 `dashboard/index.html`、`data/cache/`、自动化 memory 和项目交接文件，确认昨天页面虽然更新到 `2026-06-19`，但“行情/回测序列最新日期”仍卡在 `2026-06-16`，同时“预计下次回测调仓：2026-06-19”已经过期。
+- 已定位数据根因：`public-close` 路径在 `--offline-cache` 下会复用本地 TWSE 月缓存与矩阵缓存；而当时 `202606` 月缓存不完整，15 檔资产的共同交易日被卡住，导致页面日期前进但回测序列不前进。
+- 已最小修改 `src/risk_dashboard.py`：`public-close` 路径现在会主动刷新 TWSE 当月公开收盘资料，再回到现有缓存/矩阵流程；同时当推算出的“下一次回测调仓日”已经早于今天且正式行情仍未跟上时，页面会降级显示为“待新正式行情后重算”，并附上解释。
+- 已用项目 `.venv` 把 15 檔资产的 `202606` 月公开收盘缓存全部补齐到 `2026-06-18`；其中 `00713` 曾因 TWSE 读取超时而回退旧缓存，后续单独重试后也已补到 `2026-06-18`。
+- 补齐缓存后已重新执行正式收盘重建，当前正式页面已推进到 `行情/回测序列最新日期：2026-06-18`、`最后回测调仓日：2026-06-17`、`预计下次回测调仓：2026-06-26`、`距下次还差交易日：6`。
+- 本轮新增本地模拟盘执行落账 `3` 笔卖出：`2317 卖出 7 股`、`2881 卖出 48 股`、`2882 卖出 49 股`；对应 `data/simulated_trades_2026-06-18.csv` 与 `data/simulated_positions_2026-06-18.csv` 已生成，`data/simulated_positions_latest.csv` 已切到新状态。
+- 研究摘要、QA 基线与 iCloud Obsidian 项目卡片已同步到新口径：`AI 供应链权重 34.46%`、`风险贡献 49.89%`、`风险-权重差 +15.43%`、`trade_count=3`。
+
+### Verification Log
+
+- `./.venv/bin/python -m py_compile src/risk_dashboard.py scripts/serve_dashboard.py` 通过。
+- 已直接验证 TWSE 月资料刷新：15 檔 `202606` 缓存全部可读到 `2026-06-18`，共同最新日期为 `2026-06-18`。
+- 正式重建完成：`/usr/bin/time -p` 实测 `real 15.53`，成功生成正式 `dashboard/index.html`。
+- 页面检索通过：`今日 Dashboard 更新日期：2026-06-20`、`行情/回测序列最新日期：2026-06-18`、`最后回测调仓日：2026-06-17`、`预计下次回测调仓：2026-06-26`、`最后模拟盘执行日：2026-06-18`、`已落账模拟成交：3`、`signal-pill sell=0`。
+- `./.venv/bin/python scripts/validate_research_brief_sync.py` 通过。
+- `./.venv/bin/python scripts/validate_research_brief_metrics.py` 通过，当前关键数字为 `AI 供应链权重 34.46%`、`风险贡献 49.89%`、`风险-权重差 +15.43%`、`trade_count=3`。
+- `./.venv/bin/python scripts/run_local_qa_checks.py` 通过，输出 `/tmp/tw_quant_local_qa_summary.md` 与 `/tmp/tw_quant_local_qa_summary.json`。
+
+### Files Changed
+
+- `src/risk_dashboard.py`
+- `dashboard/index.html`
+- `data/model_portfolio_latest.csv`
+- `data/model_portfolio_2026-06-03.csv`
+- `data/model_portfolio_market_2026-06-18.csv`
+- `data/model_portfolio_market_2026-06-18_summary.txt`
+- `data/simulated_trades_2026-06-18.csv`
+- `data/simulated_positions_2026-06-18.csv`
+- `data/simulated_positions_latest.csv`
+- `scripts/validate_research_brief_sync.py`
+- `scripts/validate_research_brief_metrics.py`
+- `scripts/run_local_qa_checks.py`
+- `progress.md`
+- `findings.md`
+- `.codex/PROJECT_CONTEXT.md`
+
+### Next Loop Recommendation
+
+- 后续每日自动化可继续保留 `--offline-cache`，但需要依赖本轮新增的 `public-close` 主动刷新逻辑；若再遇到 TWSE 个别标的超时，应优先重试该月缓存，而不是误判为整轮 Dashboard 未更新。
+
 ## 2026-06-19
 
 ### Session Goal

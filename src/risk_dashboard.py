@@ -632,6 +632,24 @@ def load_prices(
     return price_data, issues
 
 
+def latest_available_public_close_date(
+    assets: list[Asset],
+    months: list[str],
+    cache_dir: Path,
+    allow_stale_cache: bool,
+) -> tuple[str | None, list[DataIssue]]:
+    """Refresh TWSE public-close data for the requested months and return the newest common date."""
+    price_data, issues = load_prices_from_twse(
+        assets=assets,
+        months=months,
+        cache_dir=cache_dir,
+        allow_stale_cache=allow_stale_cache,
+        offline_cache=False,
+    )
+    issues.append(DataIssue("DATA", "public-close 已主动刷新 TWSE 月资料"))
+    return (price_data.dates[-1] if price_data.dates else None), issues
+
+
 def simple_returns(prices: np.ndarray) -> np.ndarray:
     return prices[1:] / prices[:-1] - 1.0
 
@@ -3049,6 +3067,8 @@ def render_dashboard(
     last_rebalance_date = "无调仓记录"
     estimated_next_rebalance_date = "无可用资料"
     trading_days_to_next_rebalance = 0
+    rebalance_schedule_stale = False
+    rebalance_schedule_note = ""
     if backtest:
         backtest_start_date = backtest.dates[0] if backtest.dates else backtest_start_date
         backtest_end_date = backtest.dates[-1] if backtest.dates else backtest_end_date
@@ -3056,11 +3076,21 @@ def render_dashboard(
         trading_days_after_rebalance = sum(1 for item in backtest.dates if item > last_rebalance_date)
         trading_days_to_next_rebalance = max(0, backtest.step - trading_days_after_rebalance)
         parsed_backtest_end = parse_iso_date(backtest_end_date)
+        today_date = date.today()
         estimated_next_rebalance_date = (
             add_weekdays(parsed_backtest_end, trading_days_to_next_rebalance).isoformat()
             if parsed_backtest_end and trading_days_to_next_rebalance
             else "下一个共同交易日"
         )
+        parsed_next_rebalance = parse_iso_date(estimated_next_rebalance_date)
+        if parsed_next_rebalance and parsed_next_rebalance < today_date:
+            rebalance_schedule_stale = True
+            rebalance_schedule_note = (
+                f"该日期是基于目前只到 {backtest_end_date} 的共同交易日序列推算出的旧计划；"
+                f"在新的正式收盘资料并入前，不能据此判定 2026-06-19 已完成或错过回测调仓。"
+            )
+            estimated_next_rebalance_date = "待新正式行情后重算"
+            trading_days_to_next_rebalance = 0
     actionable_buy_count = sum(1 for signal in actionable_signals if signal.status == "buy")
     actionable_sell_count = sum(1 for signal in actionable_signals if signal.status == "sell")
     settled_signal_count = sum(1 for signal in trade_signals if "已落账" in signal.reason)
@@ -3137,7 +3167,7 @@ def render_dashboard(
           </div>
           <span class="status-pill">回测调仓 / 模拟盘执行分开记录</span>
         </div>
-        <div class="analysis-note"><b>口径说明：</b>“回测调仓”是模型每 {backtest.step if backtest else DEFAULT_REBALANCE_STEP} 个共同交易日重新计算一次权重；“模拟盘执行调仓”是本地 paper portfolio 已经写入模拟成交 CSV 的买卖动作。你今天执行的卖出计入模拟盘执行调仓，但不会强行改写回测模型的 7 日重新估计节奏。</div>
+        <div class="analysis-note"><b>口径说明：</b>“回测调仓”是模型每 {backtest.step if backtest else DEFAULT_REBALANCE_STEP} 个共同交易日重新计算一次权重；“模拟盘执行调仓”是本地 paper portfolio 已经写入模拟成交 CSV 的买卖动作。你今天执行的卖出计入模拟盘执行调仓，但不会强行改写回测模型的 7 日重新估计节奏。{' ' + html.escape(rebalance_schedule_note) if rebalance_schedule_note else ''}</div>
         <div class="metric-grid backtest-grid">
           <div class="card"><div class="metric">{html.escape(last_rebalance_date)}</div><p class="metric-label">最后回测调仓日</p></div>
           <div class="card"><div class="metric">{html.escape(estimated_next_rebalance_date)}</div><p class="metric-label">预计下次回测调仓</p></div>
@@ -3219,16 +3249,23 @@ def render_dashboard(
     if backtest:
         sample_bt = backtest.sample_metrics
         shrink_bt = backtest.shrink_metrics
-        next_rebalance_text = (
-            f"还差 {trading_days_to_next_rebalance} 个共同交易日；若无休市，最早约 {estimated_next_rebalance_date}"
-            if trading_days_to_next_rebalance
-            else "下一笔共同交易日即可触发新一轮调仓"
-        )
-        next_rebalance_note = (
-            f"回测曲线已纳入 {backtest_end_date}，但 7 个交易日调仓节奏下，最后一次重新计算权重发生在 {last_rebalance_date}；距离下一次重新计算权重{next_rebalance_text}。"
-            if backtest_end_date != last_rebalance_date
-            else f"回测曲线与最后一次重新计算权重都更新到 {backtest_end_date}。"
-        )
+        if rebalance_schedule_stale:
+            next_rebalance_note = (
+                f"回测曲线目前只纳入到 {backtest_end_date}，最后一次重新计算权重仍是 {last_rebalance_date}。"
+                f" 原先推算的下一次回测调仓日期已经早于今天，说明正式共同交易日资料还没追上；"
+                " 需要等新的公开收盘资料并入后，才能重新判断下一次回测调仓是否已经触发。"
+            )
+        else:
+            next_rebalance_text = (
+                f"还差 {trading_days_to_next_rebalance} 个共同交易日；若无休市，最早约 {estimated_next_rebalance_date}"
+                if trading_days_to_next_rebalance
+                else "下一笔共同交易日即可触发新一轮调仓"
+            )
+            next_rebalance_note = (
+                f"回测曲线已纳入 {backtest_end_date}，但 7 个交易日调仓节奏下，最后一次重新计算权重发生在 {last_rebalance_date}；距离下一次重新计算权重{next_rebalance_text}。"
+                if backtest_end_date != last_rebalance_date
+                else f"回测曲线与最后一次重新计算权重都更新到 {backtest_end_date}。"
+            )
         turnover_delta = shrink_bt.average_turnover - sample_bt.average_turnover
         drawdown_improvement = shrink_bt.max_drawdown - sample_bt.max_drawdown
         backtest_leader = "收缩协方差" if backtest.shrink_curve[-1] >= backtest.sample_curve[-1] else "普通协方差"
@@ -4257,7 +4294,29 @@ def main() -> None:
                     )
                 )
             elif args.market_source == "public-close":
+                refreshed_issues: list[DataIssue] = []
                 effective_market_date = price_data.dates[-1] if price_data.dates else args.market_date
+                try:
+                    refreshed_market_date, refreshed_issues = latest_available_public_close_date(
+                        assets=assets,
+                        months=months,
+                        cache_dir=args.cache_dir,
+                        allow_stale_cache=args.allow_stale_cache,
+                    )
+                    issues.extend(refreshed_issues)
+                    if refreshed_market_date:
+                        effective_market_date = refreshed_market_date
+                        price_data, refresh_load_issues = load_prices(
+                            assets=assets,
+                            months=months,
+                            cache_dir=args.cache_dir,
+                            allow_stale_cache=args.allow_stale_cache,
+                            offline_cache=args.offline_cache,
+                            data_source=args.data_source,
+                        )
+                        issues.extend(refresh_load_issues)
+                except Exception as exc:
+                    issues.append(DataIssue("DAILY_MARKET", f"public-close 刷新公开月资料失败，继续使用现有序列：{exc}"))
                 market_output_path = args.model_market_values or daily_market_output_path(effective_market_date, "close")
                 try:
                     updated_market = build_public_close_market_values(
