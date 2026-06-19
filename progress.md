@@ -1,5 +1,42 @@
 # Loop Engineering Progress
 
+## 2026-06-19
+
+### Session Goal
+
+按每日收盘自动化流程完成 `public-close` 正式重建、双远端推送与 Render 公网复核，并确认模拟盘状态没有回退。
+
+### Actions
+
+- 已按自动化要求读取 `AGENTS.md`、`task_plan.md`、`findings.md`、`progress.md`、`.codex/PROJECT_CONTEXT.md`、`README.md`，并确认继续保持只读行情与本地模拟盘边界。
+- 已执行正式收盘重建命令：`./.venv/bin/python src/risk_dashboard.py --start 2024-01 --end 2026-06 --offline-cache --data-source twse --model-portfolio --model-build-date 2026-06-03 --model-invest-ratio 0.75 --model-method multi-factor-shrink --ai-tilt moderate --market-source public-close --market-mode close --execute-simulated-trades`。
+- 本轮正式重建成功，`dashboard/index.html` 已刷新为 `今日 Dashboard 更新日期：2026-06-19`；但公开收盘价路径本次仍只复用了 `data/model_portfolio_market_2026-06-16.csv`，所以“行情/回测序列最新日期”继续停在 `2026-06-16`。
+- 本轮产物变更仅限 `dashboard/index.html`、`data/model_portfolio_market_2026-06-16.csv` 与 `data/model_portfolio_market_2026-06-16_summary.txt`；核心差异是页面更新日期与 `quote_time` 从 `2026-06-18T18:42:12` 刷新到 `2026-06-19T23:31:34`，当前持仓市值与未实现盈亏继续为 `NT$366,451.18` / `NT$7,198.15`。
+- `--execute-simulated-trades` 本轮继续保持幂等：Dashboard 显示最后模拟盘执行日仍为 `2026-06-16`、已落账模拟成交 `2` 笔，其中卖出 `2` 笔；`signal-pill sell` 无命中，说明没有已落账标的残留红色卖出建议。
+- 已将提交 `a02dba2` 推送到 `dashboard` 与 `origin` 两个远端；Render 公网首页在前 5 轮轮询中仍返回 `2026-06-18`，第 6 轮正文才切换为 `2026-06-19`，再次验证了 `/healthz=200` 不等于首页内容已经切到最新版本。
+
+### Verification Log
+
+- `./.venv/bin/python -m py_compile src/risk_dashboard.py scripts/serve_dashboard.py` 通过。
+- 正式重建完成：`/usr/bin/time -p` 实测 `real 15.11`，成功生成正式 `dashboard/index.html`。
+- 页面检索通过：`今日 Dashboard 更新日期：2026-06-19`、`行情/回测序列最新日期：2026-06-16`、最后回测调仓日 `2026-05-28`、预计下次回测调仓 `2026-06-19`、最后模拟盘执行日 `2026-06-16`、已落账模拟成交 `2` 笔。
+- `./.venv/bin/python scripts/run_local_qa_checks.py` 通过，输出 `/tmp/tw_quant_local_qa_summary.md` 与 `/tmp/tw_quant_local_qa_summary.json`；研究摘要同步、关键数字回归、Markdown 导出与旧格式 fixture 验证均为 `ok`。
+- `curl -I -L --max-time 30 https://futienchun-com-dashboard.onrender.com/healthz` 返回 `HTTP/2 200`。
+- Render 首页正文轮询通过：前 5 轮仍返回 `今日 Dashboard 更新日期：2026-06-18`，第 6 轮切换为 `2026-06-19`；同时 `signal_sell_count=0`，公网继续没有红色卖出建议残留。
+
+### Files Changed
+
+- `dashboard/index.html`
+- `data/model_portfolio_market_2026-06-16.csv`
+- `data/model_portfolio_market_2026-06-16_summary.txt`
+- `progress.md`
+- `findings.md`
+- `.codex/PROJECT_CONTEXT.md`
+
+### Next Loop Recommendation
+
+- 后续每日自动化仍应先接受“页面已更新但行情序列未前进”的可能性，并把它明确汇报为公开收盘价数据新鲜度限制；同时保留 Render 首页正文轮询，避免仅凭 `/healthz` 提前判定公网已完成切换。
+
 ## 2026-06-18
 
 ### Session Goal

@@ -31,6 +31,11 @@
 - 2026-06-18 已完成新一轮正式日更：用 `--market-source public-close --market-mode close --execute-simulated-trades` 重建成功，`dashboard/index.html` 更新日期为 `2026-06-18`，但本轮可并入的行情/回测序列最新日期仍为 `2026-06-16`；这代表页面已更新，但公开收盘价路径本次未产出更晚的正式序列。
 - 2026-06-18 本地模拟盘继续保持幂等：`SIMULATED_TRADES` 新增 0 笔；`data/simulated_trades_2026-06-16.csv` 仍为既有 2 笔卖出，`data/simulated_positions_latest.csv` 维持 15 檔持仓；Dashboard 中 `2317`、`1301` 均继续显示“观察”。
 - 2026-06-18 本地 QA 基线已同步到今日正式 Dashboard：研究摘要关键数字现为 `AI 供应链权重 34.61%`、`风险贡献 49.97%`、`风险-权重差 +15.37%`；`scripts/validate_research_brief_sync.py`、`scripts/validate_research_brief_metrics.py`、`scripts/run_local_qa_checks.py` 与 iCloud Obsidian `台股量化基金.md` 均已更新，`scripts/run_local_qa_checks.py` 再次通过。
+- 2026-06-19 已完成下一轮正式日更：`./.venv/bin/python -m py_compile src/risk_dashboard.py scripts/serve_dashboard.py` 通过后，再用 `--market-source public-close --market-mode close --execute-simulated-trades` 正式重建成功，`/usr/bin/time -p` 实测 `real 15.11`。
+- 2026-06-19 正式页面更新日期已切到 `2026-06-19`，但公开收盘价路径本次仍只复用 `data/model_portfolio_market_2026-06-16.csv`；因此“行情/回测序列最新日期”继续停在 `2026-06-16`，应继续解释为数据新鲜度限制，而不是页面没有重建。
+- 2026-06-19 本轮正式产物差异仅限 `dashboard/index.html`、`data/model_portfolio_market_2026-06-16.csv` 与 `data/model_portfolio_market_2026-06-16_summary.txt`：页面日期与 `quote_time` 刷新到 `2026-06-19T23:31:34`，当前持仓市值与未实现盈亏仍为 `NT$366,451.18` / `NT$7,198.15`。
+- 2026-06-19 本地模拟盘状态未回退：最后模拟盘执行日仍为 `2026-06-16`，已落账模拟成交 `2` 笔、其中卖出 `2` 笔；Dashboard 与公网 HTML 都再次确认 `signal-pill sell` 无命中。
+- 2026-06-19 已将提交 `a02dba2` 推送到 `dashboard` 与 `origin`；Render `/healthz` 先返回 `HTTP/2 200`，但首页正文前 5 次轮询仍停在 `2026-06-18`，第 6 次才切换为 `2026-06-19`，所以公网验证必须持续以首页正文为准。
 - 2026-06-17 回测区已新增滚动更新解释：当前回测覆盖 `2024-04-10 至 2026-06-16`，共 `74` 次调仓，最后一次重新计算权重日期为 `2026-05-28`。如果只补进 1 个可用交易日快照，回测曲线会更新到新日期，但不会新增 7 日调仓周期。
 - 2026-06-17 Dashboard 已新增“调仓与执行日历”：最后回测调仓日 `2026-05-28`，预计下次回测调仓 `2026-06-19`，距下次还差 `3` 个共同交易日；最后模拟盘执行日 `2026-06-16`，显示 `2317 卖出 10 股`、`1301 卖出 53 股`。回测调仓与模拟盘执行调仓必须分开解释，但都要出现在 Dashboard。
 - 2026-06-17 已创建 Codex 自动化 `dashboard`：每天 `18:40` 收盘后执行本地重建、模拟盘落账、远端推送、公网抓取验证，并在当前线程用中文回报结论。每日更新必须以公网 URL 验证作为完成条件。

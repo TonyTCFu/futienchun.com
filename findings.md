@@ -1,5 +1,13 @@
 # Loop Engineering Findings
 
+## 2026-06-19 Dashboard 日更与 Render 延迟复核
+
+- 今日自动化正式重建成功，`dashboard/index.html` 已刷新为 `今日 Dashboard 更新日期：2026-06-19`，并已由提交 `a02dba2` 推送到 `dashboard` 与 `origin` 两个远端。
+- 当前公开收盘价路径这次仍只复用了 `data/model_portfolio_market_2026-06-16.csv`，所以“行情/回测序列最新日期”继续停在 `2026-06-16`；这是数据新鲜度限制，不是重建失败。
+- 本轮真正发生变化的正式产物只有 3 个：`dashboard/index.html`、`data/model_portfolio_market_2026-06-16.csv` 与 `data/model_portfolio_market_2026-06-16_summary.txt`。差异主要是页面日期与 `quote_time` 刷新到 `2026-06-19T23:31:34`，当前持仓市值与未实现盈亏维持 `NT$366,451.18` / `NT$7,198.15`。
+- `--execute-simulated-trades` 本轮继续保持幂等：Dashboard 仍显示最后模拟盘执行日 `2026-06-16`、已落账模拟成交 `2` 笔、其中卖出 `2` 笔；`2317`、`1301` 没有重新变回红色卖出建议。
+- Render 这轮再次验证出“健康检查先好、正文后切”的延迟特征：`/healthz` 已返回 `HTTP/2 200`，但首页正文前 5 次轮询仍是 `2026-06-18`，第 6 次才切到 `2026-06-19`。后续公网验证必须继续分开看健康检查与正文内容。
+
 ## 2026-06-18 Dashboard 日更与 QA 基线刷新
 
 - 今日自动化正式重建成功，`dashboard/index.html` 已刷新为 `今日 Dashboard 更新日期：2026-06-18`。
