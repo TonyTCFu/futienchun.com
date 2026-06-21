@@ -1,5 +1,41 @@
 # Loop Engineering Progress
 
+## 2026-06-21
+
+### Session Goal
+
+执行每日收盘自动化：使用公开收盘价与本地模拟盘边界重建 Dashboard，验证本地页面状态，修复本轮发现的 `public-close` 刷新问题，并准备推送公网。
+
+### Actions
+
+- 已读取自动化 memory、`AGENTS.md`、`task_plan.md`、`findings.md`、`progress.md`、`.codex/PROJECT_CONTEXT.md`、`README.md`，并确认本轮不读取 `.env`、`.shioaji.local.env`、API key、token，也不调用券商下单。
+- 已执行正式命令：`./.venv/bin/python src/risk_dashboard.py --start 2024-01 --end 2026-06 --offline-cache --data-source twse --model-portfolio --model-build-date 2026-06-03 --model-invest-ratio 0.75 --model-method multi-factor-shrink --ai-tilt moderate --market-source public-close --market-mode close --execute-simulated-trades`。
+- 今日为周日，公开收盘价共同交易日未前进；正式 Dashboard 更新日期已切到 `2026-06-21`，行情/回测序列最新日期仍为 `2026-06-18`。
+- 本轮发现并最小修复 `src/risk_dashboard.py` 的 `public-close` 主动刷新路径：先把 `months` 绑定为局部变量；刷新范围收窄为最近月份；TWSE 返回无资料时不再覆盖已有月缓存；最近公开收盘日判定改用轻量日期交集，不再套 60 日回测门槛。
+- 模拟盘落账保持幂等：本轮新增 `0` 笔，最后模拟盘执行日仍为 `2026-06-18`，累计已落账模拟成交 `3` 笔，其中卖出 `3` 笔；持仓变化延续上一轮结果：`2317` 剩 `20` 股、`2881` 剩 `189` 股、`2882` 剩 `195` 股。
+- 本地页面已确认 `signal-pill sell=0`、`建议卖出=0`，没有已落账标的仍显示红色建议卖出。
+
+### Verification Log
+
+- `./.venv/bin/python -m py_compile src/risk_dashboard.py scripts/serve_dashboard.py scripts/run_local_qa_checks.py scripts/validate_research_brief_sync.py scripts/validate_research_brief_metrics.py` 通过。
+- 正式重建完成：`/usr/bin/time -p` 实测 `real 34.80`，成功生成正式 `dashboard/index.html`。
+- 页面检索通过：`今日 Dashboard 更新日期：2026-06-21`、`行情/回测序列最新日期：2026-06-18`、`最后回测调仓日：2026-06-17`、`预计下次回测调仓：2026-06-26`、`距下次还差交易日：6`、`最后模拟盘执行日：2026-06-18`、`已落账模拟成交：3`。
+- `./.venv/bin/python scripts/run_local_qa_checks.py` 通过，输出 `/tmp/tw_quant_local_qa_summary.md` 与 `/tmp/tw_quant_local_qa_summary.json`；关键数字仍为 `AI 供应链权重 34.46%`、`风险贡献 49.89%`、`风险-权重差 +15.43%`、`trade_count=3`。
+
+### Files Changed
+
+- `src/risk_dashboard.py`
+- `dashboard/index.html`
+- `data/model_portfolio_market_2026-06-18.csv`
+- `data/model_portfolio_market_2026-06-18_summary.txt`
+- `progress.md`
+- `findings.md`
+- `.codex/PROJECT_CONTEXT.md`
+
+### Next Loop Recommendation
+
+- 后续每日自动化应继续刷新最近月份公开资料；若遇到假日或 TWSE 暂无新资料，保持既有月缓存并明确回报“行情序列未前进”，不要误判为 Dashboard 重建失败。
+
 ## 2026-06-20
 
 ### Session Goal

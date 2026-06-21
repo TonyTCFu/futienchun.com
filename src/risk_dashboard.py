@@ -433,9 +433,13 @@ def fetch_month(symbol: str, month: str, cache_dir: Path, allow_stale_cache: boo
         payload = response.json()
         if payload.get("stat") not in {"OK", "很抱歉，沒有符合條件的資料!"}:
             raise ValueError(str(payload.get("stat")))
-        cache_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         if payload.get("stat") != "OK":
+            if allow_stale_cache and cache_path.exists():
+                cached_payload = json.loads(cache_path.read_text(encoding="utf-8"))
+                return parse_twse_rows(cached_payload, symbol), f"{symbol} {month} 使用缓存：无新公开资料"
+            cache_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
             return None, f"{symbol} {month} 无资料"
+        cache_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         return parse_twse_rows(payload, symbol), None
     except Exception as exc:
         if cache_path.exists():
@@ -639,15 +643,31 @@ def latest_available_public_close_date(
     allow_stale_cache: bool,
 ) -> tuple[str | None, list[DataIssue]]:
     """Refresh TWSE public-close data for the requested months and return the newest common date."""
-    price_data, issues = load_prices_from_twse(
-        assets=assets,
-        months=months,
-        cache_dir=cache_dir,
-        allow_stale_cache=allow_stale_cache,
-        offline_cache=False,
-    )
+    issues: list[DataIssue] = []
+    dates_by_symbol: list[set[str]] = []
+    for asset in assets:
+        asset_dates: set[str] = set()
+        for month in months:
+            month_prices, issue = fetch_month(
+                asset.symbol,
+                month,
+                cache_dir=cache_dir,
+                allow_stale_cache=allow_stale_cache,
+                offline_cache=False,
+            )
+            if issue:
+                issues.append(DataIssue(asset.symbol, issue))
+            if month_prices:
+                asset_dates.update(month_prices)
+        if asset_dates:
+            dates_by_symbol.append(asset_dates)
+        else:
+            issues.append(DataIssue(asset.symbol, "public-close 刷新未取得可用月资料"))
     issues.append(DataIssue("DATA", "public-close 已主动刷新 TWSE 月资料"))
-    return (price_data.dates[-1] if price_data.dates else None), issues
+    if not dates_by_symbol:
+        return None, issues
+    common_dates = set.intersection(*dates_by_symbol)
+    return (max(common_dates) if common_dates else None), issues
 
 
 def simple_returns(prices: np.ndarray) -> np.ndarray:
@@ -4193,9 +4213,10 @@ def render_dashboard(
 def main() -> None:
     args = parse_args()
     assets = load_universe(args.universe)
+    months = month_range(args.start, args.end)
     price_data, issues = load_prices(
         assets=assets,
-        months=month_range(args.start, args.end),
+        months=months,
         cache_dir=args.cache_dir,
         allow_stale_cache=args.allow_stale_cache,
         offline_cache=args.offline_cache,
@@ -4296,12 +4317,13 @@ def main() -> None:
             elif args.market_source == "public-close":
                 refreshed_issues: list[DataIssue] = []
                 effective_market_date = price_data.dates[-1] if price_data.dates else args.market_date
+                refresh_months = months[-1:] or months
                 try:
                     refreshed_market_date, refreshed_issues = latest_available_public_close_date(
                         assets=assets,
-                        months=months,
+                        months=refresh_months,
                         cache_dir=args.cache_dir,
-                        allow_stale_cache=args.allow_stale_cache,
+                        allow_stale_cache=True,
                     )
                     issues.extend(refreshed_issues)
                     if refreshed_market_date:
