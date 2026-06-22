@@ -26,8 +26,8 @@ def latest_market_file() -> Path:
 MONITORED_FILES = [
     ROOT / "dashboard" / "index.html",
     ROOT / "data" / "model_portfolio_latest.csv",
-    ROOT / "data" / "model_portfolio_2026-06-03.csv",
-    ROOT / "data" / "simulated_trades_2026-06-08.csv",
+    ROOT / "data" / "model_portfolio_2026-03-23.csv",
+    ROOT / "data" / "simulated_trades_2026-06-22.csv",
     ROOT / "data" / "simulated_positions_latest.csv",
     latest_market_file(),
 ]

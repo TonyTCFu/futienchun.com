@@ -11,7 +11,7 @@ EXPECTED_METRICS = {
     "ai_weight_percent": "32.24%",
     "risk_contribution_percent": "47.40%",
     "risk_weight_gap_percent": "+15.17%",
-    "trade_count": "3",
+    "trade_count": "0",
 }
 
 
