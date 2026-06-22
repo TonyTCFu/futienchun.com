@@ -1915,3 +1915,29 @@
 
 - 后续如有需要，可为折叠面板增加动画过渡效果，或支持通过按钮一次性展开/收起所有日志分组。
 
+## 2026-06-22 第二十九轮 今日持仓参数面板重组与栅格排版优化
+
+### Session Goal
+
+今日持仓与收盘盈亏显示框布局优化，解决指标卡片垂直单列拉伸、过空、排版不紧凑的问题；将数据分类为“初始计划”和“每日更新”并排显示，使排版精致且节省纵向空间。
+
+### Actions
+
+- **CSS 样式层**：在 `src/risk_dashboard.py` 中追加 `.metrics-split-container`（左右并排的双栏栅格）、`.metrics-sub-panel`（左右子区块背景卡片，分别以绿色和蓝绿色左边线指示）、以及 `.card-mini`（紧凑的 Flex 行布局，将 Label 与 Value 放在同一行左右对齐）；同时补齐了缺漏的 `.metric-grid` 响应式栅格布局样式，使其余卡片区域排版一致。
+- **HTML 模板层**：重构了 `model_html` 中数据指标的展示。将原先平铺的 15 个指标卡片划分为：
+  - **初始计划参数**：初始虚拟资金、目标建仓比例、目标配置金额、策略现金池、计划建仓日。
+  - **每日动态更新**：更新状态、行情口径、快照时间、当前持仓市值、未实现盈亏及率、手动执行状态、买入后剩余现金、手续费及卖出税估算。
+- **Git 提交流程**：将全部修改自动 commit 并 push 至公网。
+
+### Verification Log
+
+- 已执行 `./.venv/bin/python -m py_compile src/risk_dashboard.py` 编译检查通过。
+- 已执行 `./.venv/bin/python src/risk_dashboard.py --start 2025-12 --end 2026-06 --offline-cache --model-portfolio` 重建 Dashboard，生成的文件 `dashboard/index.html` 呈现高水准左右并排紧凑版面，不再拉伸。
+- 已执行 `./.venv/bin/python scripts/run_local_qa_checks.py` 自动化 QA 校验结果为 `PASS`。
+- 本地代码已全部提交并推送到 GitHub 远程仓库 `origin` 和 `dashboard` 触发公网自动部署。
+
+### Next Loop Recommendation
+
+- 观察公网最终构建页面表现，如有微调需求可对移动端小屏幕下的字体和行间距做进一步紧凑适配。
+
+

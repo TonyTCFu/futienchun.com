@@ -3713,24 +3713,43 @@ def render_dashboard(
     <section class="section panel">
       <h2>今日持仓与收盘盈亏</h2>
       <p>本区块只生成虚拟持仓与行情更新，不会连接券商交易端、不做实盘下单。模型盘建仓日为 {html.escape(model_portfolio.build_date)}；方法为{method_label}，实际使用{lookback_label}回撤资料。{html.escape(history_note)}</p>
-      <div class="metric-grid backtest-grid">
-        <div class="card"><div class="metric">{format_twd(model_portfolio.initial_cash)}</div><p class="metric-label">初始虚拟资金</p></div>
-        <div class="card"><div class="metric">{format_percent(model_portfolio.invest_ratio)}</div><p class="metric-label">目标建仓比例</p></div>
-        <div class="card"><div class="metric">{format_twd(model_portfolio.cash_reserve)}</div><p class="metric-label">策略现金池</p></div>
-        <div class="card"><div class="metric">{html.escape(update_status_label)}</div><p class="metric-label">更新状态</p></div>
-        <div class="card"><div class="metric">{html.escape(market_mode_label)}</div><p class="metric-label">行情口径</p></div>
-        <div class="card"><div class="metric">{html.escape(market_time_label)}</div><p class="metric-label">快照时间</p></div>
-        <div class="card"><div class="metric hero-stat">{format_twd(target_total)}</div><p class="metric-label">目标配置金额</p></div>
-        <div class="card"><div class="metric">{format_twd(current_market_total)}</div><p class="metric-label">当前持仓市值</p></div>
-        <div class="card"><div class="metric {'positive' if current_pnl_total >= 0 else 'negative'}">{format_twd(current_pnl_total)}</div><p class="metric-label">未实现盈亏</p></div>
-        <div class="card"><div class="metric {'positive' if current_pnl_total >= 0 else 'negative'}">{format_percent(current_pnl_pct, signed=True)}</div><p class="metric-label">未实现盈亏率</p></div>
-        <div class="card"><div class="metric">{execution_status}</div><p class="metric-label">手动执行价状态</p></div>
-        <div class="card"><div class="metric">{model_portfolio.execution_date}</div><p class="metric-label">计划建仓日</p></div>
-        <div class="card"><div class="metric">{format_twd(model_portfolio.remaining_cash)}</div><p class="metric-label">买进后剩余现金</p></div>
-        <div class="card"><div class="metric">{format_twd(total_commission)}</div><p class="metric-label">买进手续费估算</p></div>
-        <div class="card"><div class="metric">{format_twd(total_future_sell_tax)}</div><p class="metric-label">未来卖出税估算</p></div>
+      
+      <div class="metrics-split-container">
+        <!-- 初始计划参数 -->
+        <div class="metrics-sub-panel init-plan">
+          <h3>初始计划参数</h3>
+          <div class="metrics-mini-grid">
+            <div class="card-mini"><span class="label-mini">初始虚拟资金</span><span class="value-mini">{format_twd(model_portfolio.initial_cash)}</span></div>
+            <div class="card-mini"><span class="label-mini">目标建仓比例</span><span class="value-mini">{format_percent(model_portfolio.invest_ratio)}</span></div>
+            <div class="card-mini"><span class="label-mini">目标配置金额</span><span class="value-mini highlight-green">{format_twd(target_total)}</span></div>
+            <div class="card-mini"><span class="label-mini">策略现金池</span><span class="value-mini">{format_twd(model_portfolio.cash_reserve)}</span></div>
+            <div class="card-mini"><span class="label-mini">计划建仓日</span><span class="value-mini monospace">{model_portfolio.execution_date}</span></div>
+          </div>
+        </div>
+        
+        <!-- 每日动态更新 -->
+        <div class="metrics-sub-panel daily-update">
+          <h3>每日动态更新</h3>
+          <div class="metrics-mini-grid">
+            <div class="card-mini"><span class="label-mini">更新状态</span><span class="value-mini">{html.escape(update_status_label)}</span></div>
+            <div class="card-mini"><span class="label-mini">行情口径</span><span class="value-mini">{html.escape(market_mode_label)}</span></div>
+            <div class="card-mini"><span class="label-mini">快照时间</span><span class="value-mini monospace">{html.escape(market_time_label)}</span></div>
+            <div class="card-mini"><span class="label-mini">当前持仓市值</span><span class="value-mini">{format_twd(current_market_total)}</span></div>
+            <div class="card-mini">
+              <span class="label-mini">未实现盈亏</span>
+              <span class="value-mini {'positive-text' if current_pnl_total >= 0 else 'negative-text'}">
+                {format_twd(current_pnl_total)} ({format_percent(current_pnl_pct, signed=True)})
+              </span>
+            </div>
+            <div class="card-mini"><span class="label-mini">手动执行状态</span><span class="value-mini">{execution_status}</span></div>
+            <div class="card-mini"><span class="label-mini">买进后剩余现金</span><span class="value-mini">{format_twd(model_portfolio.remaining_cash)}</span></div>
+            <div class="card-mini"><span class="label-mini">买进手续费估算</span><span class="value-mini">{format_twd(total_commission)}</span></div>
+            <div class="card-mini"><span class="label-mini">未来卖出税估算</span><span class="value-mini">{format_twd(total_future_sell_tax)}</span></div>
+          </div>
+        </div>
       </div>
-      <div class="analysis-note"><b>持仓状态解释：</b>当前持仓市值与未实现盈亏来自本地模拟持仓和市值档，不是券商账户资料。持仓表说明“现在模拟盘长什么样”，下方建议单说明“规则是否触发下一步动作”；两者不是同一件事。</div>
+      
+      <div class="analysis-note"><b>持仓状态解释：</b>当前持仓市值与未实现盈亏来自本地模拟持仓 and 市值档，不是券商账户资料。持仓表说明“现在模拟盘长什么样”，下方建议单说明“规则是否触发下一步动作”；两者不是同一件事。</div>
       <table class="metric-table">
         <thead><tr><th>代码</th><th>名称</th><th>建仓价</th><th>当前价</th><th>持仓股数</th><th>买入市值</th><th>当前市值</th><th>未实现盈亏</th><th>盈亏率</th><th>目标权重</th><th>目标金额</th><th>买进手续费</th></tr></thead>
         <tbody>{model_rows}</tbody>
@@ -4401,6 +4420,80 @@ def render_dashboard(
       color: var(--neon-emerald);
       border-bottom: 2px solid var(--neon-emerald);
       background: var(--neon-emerald-soft);
+    }}
+    
+    /* Responsive grids for cards */
+    .metric-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }}
+    
+    /* Reorganized split metrics layout */
+    .metrics-split-container {{
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }}
+    .metrics-sub-panel {{
+      background: rgba(255, 255, 255, 0.015);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 14px 16px;
+    }}
+    .metrics-sub-panel h3 {{
+      margin: 0 0 12px 0;
+      font-size: 13px;
+      font-weight: 700;
+      color: #ffffff;
+      padding-left: 8px;
+      line-height: 1.2;
+    }}
+    .metrics-sub-panel.init-plan h3 {{
+      border-left: 3px solid var(--neon-emerald);
+    }}
+    .metrics-sub-panel.daily-update h3 {{
+      border-left: 3px solid var(--neon-cyan);
+    }}
+    .metrics-mini-grid {{
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }}
+    .card-mini {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 0;
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.04);
+    }}
+    .card-mini:last-child {{
+      border-bottom: none;
+    }}
+    .label-mini {{
+      font-size: 12px;
+      color: var(--muted);
+    }}
+    .value-mini {{
+      font-size: 12px;
+      font-weight: 600;
+      color: #ffffff;
+    }}
+    .value-mini.monospace {{
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }}
+    .value-mini.highlight-green {{
+      color: var(--neon-emerald);
+    }}
+    
+    /* Responsive layouts for mobile devices */
+    @media (max-width: 768px) {{
+      .metrics-split-container {{
+        grid-template-columns: 1fr;
+      }}
     }}
     
     /* JavaScript Interactive State Row Toggle Styles */
