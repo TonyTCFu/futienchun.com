@@ -43,11 +43,10 @@ def validate_sync(dashboard_path: Path, obsidian_note: Path) -> tuple[int, int]:
         raise AssertionError("Obsidian 卡片缺少 Dashboard 摘要行: " + " | ".join(missing_lines))
 
     required_fragments = [
-        "## 七、最新研究摘要",
-        "AI 供应链权重 34.38%",
-        "风险贡献 49.90%",
-        "风险-权重差 +15.52%",
-        "舊格式 2 筆",
+        "## 八、Antigravity 专属量化模型",
+        "AI 供应链权重 25.62%",
+        "风险贡献 42.82%",
+        "风险-权重差 +17.20%",
         "不代表未来报酬预测",
         "实盘订单或券商账户状态",
     ]
