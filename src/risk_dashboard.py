@@ -3289,13 +3289,13 @@ def render_dashboard(
           <div class="card"><div class="metric">{html.escape(portfolio_market_date)}</div><p class="metric-label">模型盘市值日</p></div>
           <div class="card"><div class="metric">{len(actionable_signals)}</div><p class="metric-label">待确认调仓</p></div>
         </div>
-        <div class="table-grid">
+        <div class="update-summary-stack">
           <div>
-            <h3>目前已经做了什么</h3>
+            <h3>已执行</h3>
             <ul class="risk-list">{''.join(f'<li>{html.escape(item)}</li>' for item in update_actions)}</ul>
           </div>
           <div>
-            <h3>未来短时间会做的事</h3>
+            <h3>短期行动计划</h3>
             <ul class="risk-list">{''.join(f'<li>{html.escape(item)}</li>' for item in next_steps)}</ul>
           </div>
         </div>
@@ -4079,6 +4079,12 @@ def render_dashboard(
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 14px;
+      align-items: start;
+    }}
+    .update-summary-stack {{
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 18px;
       align-items: start;
     }}
     .compact-table th, .compact-table td {{ padding: 8px 7px; }}
