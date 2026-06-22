@@ -26,7 +26,7 @@ DEFAULT_MATRIX_CACHE_DIR = ROOT / "data" / "matrix_cache"
 DEFAULT_SHIOAJI_HOME = ROOT / ".shioaji.runtime"
 DEFAULT_MODEL_OUTPUT = ROOT / "data" / "model_portfolio_latest.csv"
 DEFAULT_SIMULATED_POSITIONS_OUTPUT = ROOT / "data" / "simulated_positions_latest.csv"
-DEFAULT_MODEL_BUILD_DATE = "2026-06-03"
+DEFAULT_MODEL_BUILD_DATE = "2026-03-23"
 ANNUALIZATION_DAYS = 252
 MIN_OBSERVATIONS = 60
 MAX_WEIGHT = 0.25
@@ -34,7 +34,7 @@ REQUEST_TIMEOUT = 15
 SHIOAJI_KBARS_RETRIES = 3
 DEFAULT_REBALANCE_WINDOW = 60
 DEFAULT_REBALANCE_STEP = 7
-DEFAULT_MODEL_CASH = 300_000.0
+DEFAULT_MODEL_CASH = 1_000_000.0
 DEFAULT_MODEL_INVEST_RATIO = 0.75
 DEFAULT_DASHBOARD_UPDATE_TIME_LABEL = "每日 13:45"
 MODEL_LOOKBACK_YEARS = 5
@@ -244,16 +244,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--model-method",
         choices=("drawdown-risk", "shrink-minvar", "multi-factor-shrink"),
-        default="drawdown-risk",
+        default="multi-factor-shrink",
         help="模型盘权重方法。multi-factor-shrink 使用台股价格/量能多因子预期收益搭配收缩协方差。",
     )
     parser.add_argument("--model-cash", type=float, default=DEFAULT_MODEL_CASH, help="模型盘初始虚拟资金，单位为台币。")
-    parser.add_argument("--model-invest-ratio", type=float, default=DEFAULT_MODEL_INVEST_RATIO, help="模型盘目标建仓比例，例如 0.75 表示使用 75% 资金建仓。")
+    parser.add_argument("--model-invest-ratio", type=float, default=DEFAULT_MODEL_INVEST_RATIO, help="模型盘目标建仓比例，例如 0.75 表示使用 75%% 资金建仓。")
     parser.add_argument(
         "--ai-tilt",
         choices=("none", "moderate", "strong"),
         default="none",
-        help="仅用于 multi-factor-shrink：提高 AI 供应链目标权重。moderate 约 33%，strong 约 38%。",
+        help="仅用于 multi-factor-shrink：提高 AI 供应链目标权重。moderate 约 33%%，strong 约 38%%。",
     )
     parser.add_argument("--model-output", type=Path, default=DEFAULT_MODEL_OUTPUT, help="模型盘 CSV 输出路径。")
     parser.add_argument("--model-execution-orders", type=Path, help="手动建仓执行单 CSV；未指定时会自动读取 data/manual_build_orders_建仓日.csv。")
@@ -974,31 +974,31 @@ def aggregate_group_exposure(
 
 def apply_dark_layout(fig: go.Figure, title: str, yaxis_title: str | None = None) -> None:
     fig.update_layout(
-        title=dict(text=title, font=dict(size=15, color="#1e2f2d"), x=0.02),
+        title=dict(text=title, font=dict(size=14, color="#00f099", weight="bold"), x=0.02),
         paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="#ffffff",
-        font=dict(color="#32433f", family="PingFang TC, Microsoft JhengHei, sans-serif", size=12),
-        margin=dict(l=42, r=18, t=52, b=52),
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#e2e8f0", family="-apple-system, PingFang TC, Microsoft JhengHei, sans-serif", size=11),
+        margin=dict(l=45, r=15, t=45, b=45),
         legend=dict(
-            bgcolor="#ffffff",
-            bordercolor="#dce6e1",
+            bgcolor="#111614",
+            bordercolor="rgba(255,255,255,0.08)",
             borderwidth=1,
-            font=dict(color="#52635f"),
+            font=dict(color="#7f909e"),
         ),
-        hoverlabel=dict(bgcolor="#ffffff", bordercolor="#0f8f76", font=dict(color="#1e2f2d")),
+        hoverlabel=dict(bgcolor="#111614", bordercolor="#00f099", font=dict(color="#e2e8f0")),
     )
     fig.update_xaxes(
-        gridcolor="#edf2ef",
-        linecolor="#d6e0dc",
-        tickfont=dict(color="#6c7d78"),
-        zerolinecolor="#d6e0dc",
+        gridcolor="rgba(255,255,255,0.05)",
+        linecolor="rgba(255,255,255,0.12)",
+        tickfont=dict(color="#7f909e"),
+        zerolinecolor="rgba(255,255,255,0.12)",
     )
     fig.update_yaxes(
-        gridcolor="#edf2ef",
-        linecolor="#d6e0dc",
-        tickfont=dict(color="#6c7d78"),
-        zerolinecolor="#d6e0dc",
-        title=dict(text=yaxis_title or "", font=dict(color="#6c7d78")),
+        gridcolor="rgba(255,255,255,0.05)",
+        linecolor="rgba(255,255,255,0.12)",
+        tickfont=dict(color="#7f909e"),
+        zerolinecolor="rgba(255,255,255,0.12)",
+        title=dict(text=yaxis_title or "", font=dict(color="#7f909e")),
     )
 
 
@@ -1461,6 +1461,36 @@ def drawdown_risk_weights(
     return weights, metrics, price_date, lookback_start, lookback_years
 
 
+def solve_risk_parity(cov: np.ndarray, scores: np.ndarray, max_weight: float) -> np.ndarray:
+    """
+    Solves the Risk Parity optimization problem with risk budgets scaled by composite scores.
+    Budgets are positive and sum to 1.
+    """
+    from scipy.optimize import minimize
+    n = cov.shape[0]
+    
+    # Map scores to positive budgets.
+    # Scores can be negative, so we use softmax-like exponential mapping to keep them positive.
+    budgets = np.exp(scores * 0.5)
+    budgets = budgets / np.sum(budgets)
+    
+    def objective(w):
+        port_var = float(w.dot(cov).dot(w))
+        if port_var <= 1e-10:
+            return 1e10
+        rc = w * cov.dot(w) / port_var
+        return float(np.sum((rc - budgets) ** 2))
+    
+    cons = ({"type": "eq", "fun": lambda w: np.sum(w) - 1.0})
+    bounds = [(0.0, max_weight) for _ in range(n)]
+    w0 = np.ones(n) / n
+    
+    res = minimize(objective, w0, method="SLSQP", bounds=bounds, constraints=cons, options={"maxiter": 200, "ftol": 1e-8})
+    if res.success:
+        return res.x
+    return w0
+
+
 def multi_factor_shrink_weights(
     assets: list[Asset],
     price_data: PriceData,
@@ -1479,14 +1509,11 @@ def multi_factor_shrink_weights(
 
     window_prices = price_data.prices[start_index : price_index + 1]
     window_returns = simple_returns(window_prices)
-    valid_indices: list[int] = []
+    
+    # 1. Filter out symbols with bad data
+    data_valid_indices: list[int] = []
     metrics: dict[str, dict[str, float]] = {}
-    momentum_values: list[float] = []
-    low_vol_values: list[float] = []
-    drawdown_values: list[float] = []
-    liquidity_values: list[float] = []
-    trend_strength_values: list[float] = []
-
+    
     for index, symbol in enumerate(price_data.symbols):
         series = window_prices[:, index]
         asset_returns = window_returns[:, index]
@@ -1499,85 +1526,123 @@ def multi_factor_shrink_weights(
         if max_dd <= 0 or volatility <= 0:
             issues.append(DataIssue(symbol, "多因子模型回撤或波动不可估，模型盘已剔除"))
             continue
-        if len(series) >= 253:
-            momentum = float(series[-22] / series[-253] - 1.0)
-        else:
-            momentum = capped_compound_return(series, min(120, len(series) - 1))
-        ma20 = mean_tail(series, 20)
-        ma60 = mean_tail(series, 60)
-        price_vs_ma60 = float(series[-1] / ma60 - 1.0) if ma60 and ma60 > 0 else 0.0
-        ma_spread = float(ma20 / ma60 - 1.0) if ma20 and ma60 and ma60 > 0 else 0.0
-        trend_strength = 0.6 * price_vs_ma60 + 0.4 * ma_spread
-        liquidity = 0.0
-        if price_data.amounts is not None:
-            amount_series = price_data.amounts[start_index : price_index + 1, index]
-            average_amount = mean_tail(amount_series, min(20, len(amount_series)))
-            liquidity = math.log1p(average_amount or 0.0)
-        valid_indices.append(index)
-        momentum_values.append(momentum)
-        low_vol_values.append(-volatility)
-        drawdown_values.append(-max_dd)
-        liquidity_values.append(liquidity)
-        trend_strength_values.append(trend_strength)
+            
+        data_valid_indices.append(index)
         metrics[symbol] = {
             "max_drawdown": max_dd,
             "annual_volatility": volatility,
             "drawdown_days": float(max_drawdown_duration(drawdown(curve))),
         }
 
-    if not valid_indices:
-        raise RuntimeError("没有资产满足多因子模型盘建仓条件。")
-    if len(valid_indices) * max_weight < 1:
-        raise RuntimeError(f"满足条件的资产数量不足，无法在单一资产上限 {max_weight:.0%} 下满仓。")
+    if not data_valid_indices:
+        raise RuntimeError("没有资产满足多因子模型盘基本数据要求。")
 
-    momentum_z = zscore(np.array(momentum_values, dtype=float))
-    low_vol_z = zscore(np.array(low_vol_values, dtype=float))
-    drawdown_z = zscore(np.array(drawdown_values, dtype=float))
-    liquidity_z = zscore(np.array(liquidity_values, dtype=float))
-    trend_strength_z = zscore(np.array(trend_strength_values, dtype=float))
-    price_factor_scores = (
-        0.28 * momentum_z
-        + 0.22 * low_vol_z
-        + 0.20 * drawdown_z
-        + 0.12 * liquidity_z
-        + 0.18 * trend_strength_z
-    )
-    industry_ai_scores, macro_external_scores = build_proxy_external_overlay(
-        assets=assets,
-        price_data=price_data,
-        valid_indices=valid_indices,
-        momentum_values=np.array(momentum_values, dtype=float),
-        low_vol_values=np.array(low_vol_values, dtype=float),
-        drawdown_values=np.array(drawdown_values, dtype=float),
-        liquidity_values=np.array(liquidity_values, dtype=float),
-        trend_strength_values=np.array(trend_strength_values, dtype=float),
-    )
-    composite_scores = 0.60 * price_factor_scores + 0.25 * industry_ai_scores + 0.15 * macro_external_scores
-    expected_returns = 0.06 + 0.025 * composite_scores
-    valid_covariance = shrink_covariance[np.ix_(valid_indices, valid_indices)]
-    valid_weights = drop_tiny_weights(max_sharpe_weights(expected_returns, valid_covariance, max_weight), max_weight=max_weight)
+    # 2. Dynamic Trend Filter among data-valid assets
+    valid_indices = []
+    for index in data_valid_indices:
+        series = window_prices[:, index]
+        close = series[-1]
+        ma20 = np.mean(series[-20:])
+        ma60 = np.mean(series[-min(60, len(series)):])
+        if close > ma60 and ma20 > ma60:
+            valid_indices.append(index)
+            
+    # Safeguard 1: close > ma60
+    if len(valid_indices) < 4:
+        valid_indices = []
+        for index in data_valid_indices:
+            series = window_prices[:, index]
+            close = series[-1]
+            ma60 = np.mean(series[-min(60, len(series)):])
+            if close > ma60:
+                valid_indices.append(index)
+                
+    # Safeguard 2: all data-valid assets
+    if len(valid_indices) < 4:
+        valid_indices = list(data_valid_indices)
+
+    # 3. Calculate factors for valid assets
+    momentum_values = []
+    low_vol_values = []
+    trend_strength_values = []
+    
+    for index in valid_indices:
+        series = window_prices[:, index]
+        asset_returns = window_returns[:, index]
+        # Momentum: 60-day return
+        mom = float(series[-1] / series[-min(60, len(series))] - 1.0) if len(series) >= 60 else float(series[-1] / series[0] - 1.0)
+        # Volatility: 20-day volatility
+        vol = float(np.std(asset_returns[-20:]) * math.sqrt(252)) if len(asset_returns) >= 20 else float(np.std(asset_returns) * math.sqrt(252))
+        
+        ma20 = np.mean(series[-20:])
+        ma60 = np.mean(series[-min(60, len(series)):])
+        price_vs_ma60 = float(series[-1] / ma60 - 1.0) if ma60 and ma60 > 0 else 0.0
+        ma_spread = float(ma20 / ma60 - 1.0) if ma20 and ma60 and ma60 > 0 else 0.0
+        trend_strength = 0.6 * price_vs_ma60 + 0.4 * ma_spread
+        
+        momentum_values.append(mom)
+        low_vol_values.append(-vol)
+        trend_strength_values.append(trend_strength)
+
+    # Standardize factors
+    def simple_zscore(x):
+        arr = np.array(x, dtype=float)
+        std = np.std(arr)
+        if std <= 1e-8:
+            return np.zeros_like(arr)
+        return (arr - np.mean(arr)) / std
+
+    mom_z = simple_zscore(momentum_values)
+    vol_z = simple_zscore(low_vol_values)
+    trend_strength_z = simple_zscore(trend_strength_values)
+
+    # AI score
     asset_by_symbol = {asset.symbol: asset for asset in assets}
-    ai_mask = np.array(
-        [asset_by_symbol.get(price_data.symbols[index], Asset(price_data.symbols[index], "", "", "")).ai_supply_chain for index in valid_indices],
-        dtype=bool,
-    )
-    if ai_tilt == "moderate":
-        valid_weights = drop_tiny_weights(apply_group_tilt(valid_weights, ai_mask, 0.33, 0.35, max_weight), max_weight=max_weight)
-        issues.append(DataIssue("MODEL_PORTFOLIO", "AI 供应链倾斜：moderate，软目标约 33%，群组上限 35%。"))
-    elif ai_tilt == "strong":
-        valid_weights = drop_tiny_weights(apply_group_tilt(valid_weights, ai_mask, 0.38, 0.40, max_weight), max_weight=max_weight)
-        issues.append(DataIssue("MODEL_PORTFOLIO", "AI 供应链倾斜：strong，软目标约 38%，群组上限 40%。"))
+    ai_scores = []
+    for index in valid_indices:
+        symbol = price_data.symbols[index]
+        ai_scores.append(1.0 if asset_by_symbol.get(symbol).ai_supply_chain else 0.0)
 
+    # Combine scores for Antigravity Risk Parity
+    scores = 0.40 * mom_z + 0.40 * vol_z + 0.20 * np.array(ai_scores)
+
+    # Solve risk parity optimization for the valid assets
+    valid_cov = shrink_covariance[np.ix_(valid_indices, valid_indices)]
+    valid_weights = solve_risk_parity(valid_cov, scores, max_weight)
+
+    issues.append(DataIssue("MODEL_PORTFOLIO", f"已执行 Antigravity 动量-低波-AI 因子加权风险平价模型，选股池包含 {len(valid_indices)} 檔趋势股。"))
+
+    # Map back to full weight vector
     weights = np.zeros(len(price_data.symbols), dtype=float)
     for offset, index in enumerate(valid_indices):
         symbol = price_data.symbols[index]
         weights[index] = valid_weights[offset]
-        metrics[symbol]["risk_score"] = float(composite_scores[offset])
-        metrics[symbol]["price_factor_score"] = float(price_factor_scores[offset])
-        metrics[symbol]["industry_ai_score"] = float(industry_ai_scores[offset])
-        metrics[symbol]["macro_external_score"] = float(macro_external_scores[offset])
-        metrics[symbol]["composite_score"] = float(composite_scores[offset])
+        metrics[symbol]["risk_score"] = float(scores[offset])
+        metrics[symbol]["price_factor_score"] = float(mom_z[offset])
+        metrics[symbol]["industry_ai_score"] = float(ai_scores[offset])
+        metrics[symbol]["macro_external_score"] = float(vol_z[offset])
+        metrics[symbol]["composite_score"] = float(scores[offset])
         metrics[symbol]["trend_strength_score"] = float(trend_strength_z[offset])
+
+    # Fill defaults for all other symbols to avoid KeyError downstream
+    for symbol in price_data.symbols:
+        if symbol not in metrics:
+            metrics[symbol] = {
+                "max_drawdown": 0.0,
+                "annual_volatility": 0.0,
+                "drawdown_days": 0.0,
+                "risk_score": 0.0,
+                "price_factor_score": 0.0,
+                "industry_ai_score": 0.0,
+                "macro_external_score": 0.0,
+                "composite_score": 0.0,
+                "trend_strength_score": 0.0,
+            }
+        else:
+            for k in ["risk_score", "price_factor_score", "industry_ai_score", "macro_external_score", "composite_score", "trend_strength_score"]:
+                if k not in metrics[symbol]:
+                    metrics[symbol][k] = 0.0
+
     return weights, metrics, price_date, price_data.dates[start_index], 1
 
 
@@ -3768,359 +3833,419 @@ def render_dashboard(
         for symbol in symbols
     )
 
+    initial_cash = model_portfolio.initial_cash if model_portfolio else 1000000.0
+    remaining_cash = model_portfolio.remaining_cash if model_portfolio else 1000000.0
+    invest_ratio = model_portfolio.invest_ratio if model_portfolio else 0.75
+    cash_reserve = model_portfolio.cash_reserve if model_portfolio else 250000.0
+    
+    current_market_value = sum((position.current_market_value or 0.0) for position in model_portfolio.positions) if model_portfolio else 0.0
+    current_unrealized_pnl = sum((position.unrealized_pnl or 0.0) for position in model_portfolio.positions) if model_portfolio else 0.0
+    
+    cost_basis = sum(position.total_buy_cost if position.total_buy_cost is not None else position.market_value or 0.0 for position in model_portfolio.positions) if model_portfolio else 0.0
+    unrealized_pnl_pct = current_unrealized_pnl / cost_basis if cost_basis else 0.0
+    
+    total_value = current_market_value + remaining_cash
+    
+    backtest_max_dd = backtest.shrink_metrics.max_drawdown if backtest else (shrink_dd.min() if len(shrink_dd) else 0.0)
+    pnl_class = "positive-text" if current_unrealized_pnl >= 0 else "negative-text"
+
     page = f"""<!doctype html>
 <html lang="zh-Hant">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>台灣股市Antigravity</title>
+  <title>台灣股市 Antigravity 量化終端</title>
   <style>
     :root {{
-      --bg: #f4f8f6;
-      --panel: #ffffff;
-      --panel-soft: #f8fbf9;
-      --line: #dce6e1;
-      --line-strong: #c9d8d2;
-      --ink: #1e2f2d;
-      --muted: #6b7d78;
-      --green: #0f8f76;
-      --green-soft: #e8f5f1;
-      --red: #c94444;
-      --red-soft: #fff0f0;
-      --amber: #b86b00;
-      --orange: #c66b00;
-      --shadow: 0 18px 42px rgba(31, 58, 50, 0.08);
+      --bg: #070908;
+      --panel: #0f1311;
+      --panel-hover: #161b18;
+      --panel-border: rgba(255, 255, 255, 0.08);
+      --glass-panel: rgba(15, 19, 17, 0.85);
+      --border-glow: rgba(0, 240, 153, 0.15);
+      --line: rgba(255, 255, 255, 0.08);
+      --ink: #e2e8f0;
+      --muted: #7f909e;
+      --neon-emerald: #00f099;
+      --neon-emerald-soft: rgba(0, 240, 153, 0.08);
+      --neon-cyan: #00f0ff;
+      --neon-cyan-soft: rgba(0, 240, 255, 0.08);
+      --crimson: #ff3b69;
+      --crimson-soft: rgba(255, 59, 105, 0.08);
+      --orange: #ff9f1c;
+      --orange-soft: rgba(255, 159, 28, 0.08);
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     }}
     * {{ box-sizing: border-box; }}
-    html {{ scroll-behavior: smooth; }}
     body {{
       margin: 0;
       color: var(--ink);
       background: var(--bg);
-      font-family: "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
-      font-size: 14px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang TC", "Microsoft JhengHei", sans-serif;
+      font-size: 13px;
       overflow-x: hidden;
+      line-height: 1.5;
     }}
     a {{ color: inherit; text-decoration: none; }}
+    
     .app-shell {{
-      display: grid;
-      grid-template-columns: 72px minmax(0, 1fr) 280px;
-      gap: 12px;
+      display: flex;
+      flex-direction: column;
       min-height: 100vh;
-      padding: 14px;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
     }}
-    .left-nav {{
-      position: sticky;
-      top: 18px;
-      height: calc(100vh - 36px);
-      border: 1px solid var(--line);
-      background: var(--panel);
-      border-radius: 8px;
-      padding: 14px 10px;
-      box-shadow: var(--shadow);
-    }}
-    .brand-mark {{
-      width: 38px;
-      height: 38px;
-      margin: 0 auto 18px;
-      border-radius: 8px;
-      display: grid;
-      place-items: center;
-      color: #fff;
-      font-weight: 800;
-      background: var(--green);
-    }}
-    .nav-item {{
-      display: grid;
-      place-items: center;
-      gap: 4px;
-      min-height: 58px;
-      color: var(--muted);
-      border-radius: 8px;
-      font-size: 11px;
-    }}
-    .nav-item.active {{ color: var(--green); background: var(--green-soft); font-weight: 700; }}
-    .nav-icon {{ font-size: 17px; line-height: 1; }}
-    .app-main {{ min-width: 0; }}
+    
+    /* Topbar styling */
     .topbar {{
       display: flex;
       justify-content: space-between;
-      align-items: flex-start;
-      gap: 18px;
-      margin-bottom: 14px;
+      align-items: center;
+      margin-bottom: 15px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid var(--line);
     }}
     .title-block h1 {{
-      margin: 0 0 6px;
-      font-size: 25px;
-      line-height: 1.18;
-      font-weight: 850;
+      margin: 0 0 5px;
+      font-size: 22px;
+      font-weight: 800;
+      color: #ffffff;
+      background: linear-gradient(135deg, #ffffff 40%, var(--neon-emerald) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
     }}
-    .title-block p {{ margin: 0; color: var(--muted); line-height: 1.55; }}
+    .title-block p {{
+      margin: 0;
+      color: var(--muted);
+      font-size: 11px;
+    }}
     .top-actions {{
       display: flex;
+      gap: 12px;
       align-items: center;
-      gap: 8px;
+      font-size: 11px;
       color: var(--muted);
-      font-size: 12px;
-      white-space: nowrap;
     }}
     .action-button {{
-      border: 0;
-      border-radius: 8px;
-      padding: 9px 12px;
-      color: #fff;
-      background: var(--green);
-      font-weight: 700;
+      background: var(--neon-emerald-soft);
+      border: 1px solid var(--neon-emerald);
+      color: var(--neon-emerald);
+      border-radius: 4px;
+      padding: 6px 12px;
+      font-size: 11px;
+      font-weight: 600;
       cursor: pointer;
+      transition: all 0.2s ease;
     }}
-    .action-button:focus-visible {{
-      outline: 3px solid rgba(36, 128, 105, 0.25);
-      outline-offset: 2px;
+    .action-button:hover {{
+      background: var(--neon-emerald);
+      color: #000;
+      box-shadow: 0 0 10px rgba(0, 240, 153, 0.4);
     }}
+    
+    /* KPI Banner styling */
+    .top-kpi-banner {{
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }}
+    .kpi-card {{
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+      padding: 12px 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      position: relative;
+      overflow: hidden;
+    }}
+    .kpi-card::before {{
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 3px;
+      height: 100%;
+      background: var(--neon-cyan);
+    }}
+    .kpi-card:nth-child(2)::before {{
+      background: var(--neon-emerald);
+    }}
+    .kpi-card:nth-child(4)::before {{
+      background: var(--crimson);
+    }}
+    .kpi-label {{
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }}
+    .kpi-value {{
+      font-size: 18px;
+      font-weight: 800;
+      color: #ffffff;
+      line-height: 1.2;
+    }}
+    .kpi-sub {{
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+    }}
+    
+    /* Text colors */
+    .positive-text, .positive {{ color: var(--neon-emerald) !important; }}
+    .negative-text, .negative {{ color: var(--crimson) !important; }}
+    .crimson-text {{ color: var(--crimson) !important; }}
+    
+    /* Horizontal Tab Bar styling */
+    .tabs-bar {{
+      display: flex;
+      gap: 5px;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 20px;
+    }}
+    .tab-label {{
+      padding: 10px 20px;
+      cursor: pointer;
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 13px;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+      user-select: none;
+    }}
+    .tab-label:hover {{
+      color: #ffffff;
+      background: rgba(255,255,255,0.02);
+    }}
+    
+    /* Toggle Panel styling */
     .check-panel {{
       display: none;
-      margin: -2px 0 14px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #ffffff;
-      box-shadow: var(--shadow);
-      padding: 14px;
+      margin-bottom: 20px;
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+      background: var(--panel);
+      padding: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
     }}
     .check-panel.is-open {{ display: block; }}
     .check-grid {{
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-      gap: 10px;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
     }}
     .check-item {{
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 6px;
       padding: 10px;
-      background: #fbfdfc;
+      background: rgba(255,255,255,0.01);
     }}
-    .check-item b {{ display: block; margin-bottom: 4px; color: var(--text); }}
-    .check-item span {{ color: var(--muted); font-size: 12px; line-height: 1.45; }}
-    .check-item.pass {{ border-color: rgba(36, 128, 105, 0.28); background: var(--green-soft); }}
-    .check-item.warn {{ border-color: rgba(190, 112, 37, 0.28); background: #fff8ee; }}
-    .trade-actions {{
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      align-items: center;
+    .check-item b {{ display: block; margin-bottom: 4px; color: #ffffff; }}
+    .check-item span {{ color: var(--muted); font-size: 11px; line-height: 1.4; }}
+    .check-item.pass {{ border-color: rgba(0, 240, 153, 0.2); background: rgba(0, 240, 153, 0.02); }}
+    .check-item.warn {{ border-color: rgba(255, 159, 28, 0.2); background: rgba(255, 159, 28, 0.02); }}
+    
+    /* Panel and Layout elements */
+    .panel {{
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
     }}
-    .trade-button {{
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 7px 10px;
-      background: #fff;
-      color: var(--text);
+    .panel h2 {{
+      margin: 0 0 12px;
+      font-size: 15px;
       font-weight: 700;
-      cursor: pointer;
+      color: #ffffff;
+      border-left: 3px solid var(--neon-emerald);
+      padding-left: 8px;
     }}
-    .trade-button.primary {{
-      border-color: var(--green);
-      background: var(--green);
-      color: #fff;
+    .panel h3 {{
+      margin: 0 0 8px;
+      font-size: 13px;
+      color: #ffffff;
     }}
-    .trade-button.done {{
-      border-color: rgba(36, 128, 105, 0.24);
-      background: var(--green-soft);
-      color: var(--green);
-    }}
-    .trade-status {{
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 72px;
-      padding: 4px 8px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 800;
-      background: #fff8ee;
-      color: #9b5c17;
-    }}
-    .trade-status.done {{
-      background: var(--green-soft);
-      color: var(--green);
-    }}
-    .trade-id {{
-      margin-top: 2px;
+    .panel p {{
       color: var(--muted);
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      margin: 0 0 12px;
+      line-height: 1.6;
+    }}
+    
+    /* Strategy structure grids */
+    .strategy-list {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+      margin: 12px 0;
+    }}
+    .strategy-list .card {{
+      background: rgba(255,255,255,0.01);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 12px;
+    }}
+    .strategy-list .card b {{ display: block; margin-bottom: 6px; color: #ffffff; }}
+    
+    /* Tables styling */
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      background: transparent;
+    }}
+    th {{
+      background: rgba(255,255,255,0.02);
+      color: var(--muted);
       font-size: 11px;
-      line-height: 1.35;
-      white-space: nowrap;
+      font-weight: 700;
+      padding: 10px 8px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+    }}
+    td {{
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+      color: var(--ink);
+    }}
+    tr:hover td {{
+      background: var(--panel-hover);
+    }}
+    
+    /* Layout utilities */
+    .grid-2col {{
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+      align-items: start;
+    }}
+    .grid-1-1 {{
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      align-items: start;
+    }}
+    
+    /* Charts container */
+    .chart {{
+      background: rgba(255, 255, 255, 0.01);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 12px;
+      margin-top: 12px;
+      overflow: hidden;
+    }}
+    .chart-wide {{
+      padding: 12px;
+    }}
+    
+    /* Badges & Pills */
+    .status-pill {{
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--muted);
+      font-weight: 700;
+      display: inline-block;
     }}
     .signal-pill {{
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-width: 72px;
-      padding: 4px 8px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 800;
-      background: #eef3f1;
-      color: var(--muted);
-    }}
-    .signal-pill.buy {{
-      background: var(--green-soft);
-      color: var(--green);
-    }}
-    .signal-pill.sell {{
-      background: var(--red-soft);
-      color: var(--red);
-    }}
-    .empty-order-cell {{
-      padding: 18px 16px;
-      color: var(--muted);
-      font-weight: 700;
-      text-align: center;
-      background: #f8fbf9;
-    }}
-    .strategy-list {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-      gap: 10px;
-      margin-top: 12px;
-    }}
-    .strategy-list .card {{ padding: 12px; }}
-    .asset-tabs {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
-      gap: 8px;
-      margin-bottom: 14px;
-    }}
-    .asset-chip {{
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
-      padding: 9px 10px;
-      min-height: 54px;
-      box-shadow: 0 6px 18px rgba(31,58,50,0.04);
-    }}
-    .asset-chip b {{ display: block; font-size: 13px; margin-bottom: 3px; }}
-    .asset-chip span {{ display: block; color: var(--muted); font-size: 11px; line-height: 1.25; }}
-    .hero, .panel, .chart, .side-card {{
-      border: 1px solid var(--line);
-      background: var(--panel);
-      border-radius: 8px;
-      box-shadow: var(--shadow);
-    }}
-    .hero {{ padding: 18px; margin-bottom: 14px; }}
-    .hero-content {{ display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: stretch; }}
-    .eyebrow {{ color: var(--green); font-size: 12px; font-weight: 800; margin-bottom: 8px; }}
-    .lead {{ color: var(--muted); line-height: 1.6; max-width: 760px; }}
-    .insight-strip, .metric-grid {{
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 10px;
-      margin-top: 14px;
-    }}
-    .metric-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 0; }}
-    .insight, .card {{
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel-soft);
-      padding: 13px;
-      min-width: 0;
-    }}
-    .insight b, .metric-label, .eyebrow-label {{
-      display: block;
-      color: var(--muted);
+      min-width: 68px;
+      padding: 3px 6px;
+      border-radius: 4px;
       font-size: 11px;
       font-weight: 700;
-      margin: 0 0 6px;
     }}
-    .insight span, .metric {{
-      display: block;
-      color: var(--ink);
-      font-size: 22px;
-      line-height: 1.15;
-      font-weight: 850;
+    .signal-pill.buy {{ background: var(--neon-emerald-soft); color: var(--neon-emerald); }}
+    .signal-pill.sell {{ background: var(--crimson-soft); color: var(--crimson); }}
+    .signal-pill.observe {{ background: rgba(255,255,255,0.04); color: var(--muted); }}
+    
+    .trade-status {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 72px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      background: var(--orange-soft);
+      color: var(--orange);
     }}
-    .hero-stat {{ color: var(--green); }}
-    .stress-number, .big-risk {{ color: var(--red); }}
-    .section {{ margin-top: 14px; }}
-    .panel {{ padding: 16px; }}
-    .chart {{ padding: 12px; overflow: hidden; }}
-    .chart .plotly-graph-div {{ min-height: 360px; }}
-    .chart-wide .plotly-graph-div {{ min-height: 430px; }}
-    .grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }}
-    .stress-grid {{ display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: stretch; }}
-    h2 {{ margin: 0 0 10px; font-size: 18px; line-height: 1.25; }}
-    h3 {{ margin: 0 0 8px; font-size: 16px; }}
-    p {{ color: var(--muted); line-height: 1.65; margin: 0 0 10px; }}
-    table {{ width: 100%; border-collapse: collapse; background: var(--panel); }}
-    .metric-table {{ margin-top: 12px; }}
-    th, td {{ padding: 10px 9px; border-bottom: 1px solid #edf2ef; text-align: left; font-size: 12px; vertical-align: middle; }}
-    th {{ color: var(--muted); background: var(--panel-soft); font-size: 11px; font-weight: 800; }}
-    tr:hover td {{ background: #fbfdfc; }}
-    .risk-list {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }}
-    .risk-list li {{ padding: 11px 12px; border: 1px solid #f0d3d3; border-radius: 8px; color: #7e2b2b; background: var(--red-soft); font-size: 12px; line-height: 1.45; }}
-    .analysis-note {{
-      margin: 0 0 10px;
-      padding: 11px 12px;
-      border: 1px solid rgba(36, 128, 105, 0.18);
-      border-radius: 8px;
-      background: var(--green-soft);
-      color: var(--ink);
-      font-size: 13px;
-      line-height: 1.6;
+    .trade-status.done {{
+      background: var(--neon-emerald-soft);
+      color: var(--neon-emerald);
     }}
-    .analysis-note b {{ color: var(--green); }}
-    .section-toolbar {{
+    
+    /* Execution panel cards */
+    .execution-panel {{
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }}
+    .side-card {{
+      background: rgba(255,255,255,0.01);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 14px;
+    }}
+    .side-card.warning {{
+      background: rgba(255, 59, 105, 0.02);
+      border-color: rgba(255, 59, 105, 0.2);
+    }}
+    .side-card.warning h3 {{
+      color: var(--crimson);
+    }}
+    .compact-status {{
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--crimson);
+      margin-bottom: 8px;
+    }}
+    .split-row {{
       display: flex;
       justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
-      align-items: flex-start;
-      margin: 0 0 12px;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      font-size: 11px;
+      color: var(--muted);
     }}
-    .section-toolbar p {{
-      margin: 0;
-      flex: 1 1 420px;
-    }}
-    .section-toolbar .trade-actions {{
-      margin-left: auto;
-    }}
-    textarea.research-report {{
-      display: block;
-      width: 100%;
-      min-height: 150px;
-      white-space: pre-wrap;
-      margin: 0;
-      padding: 14px;
-      border: 1px solid #dce6e1;
-      border-radius: 8px;
-      background: #f8fbf9;
+    .split-row b {{
       color: var(--ink);
-      font: 13px/1.7 "PingFang TC", "Microsoft JhengHei", sans-serif;
-      resize: vertical;
-      box-sizing: border-box;
     }}
-    .table-grid {{
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px;
-      align-items: start;
+    
+    /* Lists */
+    .order-list {{ list-style: none; margin: 0; padding: 0; }}
+    .order-list li {{
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      font-size: 11px;
     }}
-    .update-summary-list {{
-      grid-template-columns: 1fr;
-    }}
-    .compact-table th, .compact-table td {{ padding: 8px 7px; }}
-    .signal-table th, .signal-table td {{ padding: 8px 7px; }}
+    .order-list span {{ font-weight: 700; color: var(--ink); }}
+    .order-list b {{ color: var(--neon-emerald); }}
+    .order-list small {{ color: var(--muted); }}
+    
+    /* Signal table layout */
     .signal-table {{ table-layout: fixed; }}
-    .signal-col-action {{ width: 9%; }}
-    .signal-col-code {{ width: 7%; }}
-    .signal-col-name {{ width: 18%; }}
+    .signal-col-action {{ width: 11%; }}
+    .signal-col-code {{ width: 8%; }}
+    .signal-col-name {{ width: 17%; }}
     .signal-col-price {{ width: 9%; }}
     .signal-col-cost {{ width: 9%; }}
-    .signal-col-days {{ width: 7%; }}
-    .signal-col-return {{ width: 10%; }}
-    .signal-col-shares {{ width: 8%; }}
-    .signal-col-reason {{ width: 23%; }}
-    .signal-table .name-cell {{ min-width: 92px; }}
+    .signal-col-days {{ width: 9%; }}
+    .signal-col-return {{ width: 11%; }}
+    .signal-col-shares {{ width: 9%; }}
+    .signal-col-reason {{ width: 17%; }}
     .signal-table th:nth-child(1), .signal-table td:nth-child(1),
     .signal-table th:nth-child(2), .signal-table td:nth-child(2),
     .signal-table th:nth-child(4), .signal-table td:nth-child(4),
@@ -4128,199 +4253,289 @@ def render_dashboard(
     .signal-table th:nth-child(6), .signal-table td:nth-child(6),
     .signal-table th:nth-child(7), .signal-table td:nth-child(7),
     .signal-table th:nth-child(8), .signal-table td:nth-child(8) {{ text-align: center; }}
-    .signal-table td:last-child, .signal-table th:last-child {{ white-space: nowrap; }}
-    .name-cell {{ min-width: 112px; }}
-    .asset-name {{ display: inline-block; white-space: nowrap; }}
-    .footer-note {{ margin-top: 12px; font-size: 12px; color: var(--muted); }}
-    .issues ul {{ margin: 0; padding-left: 18px; color: var(--muted); }}
-    code {{ color: var(--green); background: var(--green-soft); padding: 2px 5px; border-radius: 5px; }}
-    .execution-panel {{
-      position: sticky;
-      top: 18px;
-      height: calc(100vh - 36px);
+    
+    /* Buttons in trade card */
+    .trade-actions {{
+      display: flex;
+      gap: 8px;
+    }}
+    .trade-button {{
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--line);
+      color: var(--ink);
+      border-radius: 4px;
+      padding: 5px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+    }}
+    .trade-button.primary {{
+      background: var(--neon-emerald-soft);
+      border-color: var(--neon-emerald);
+      color: var(--neon-emerald);
+    }}
+    .trade-button.done {{
+      background: rgba(255,255,255,0.02);
+      border-color: rgba(255,255,255,0.1);
+      color: var(--muted);
+    }}
+    
+    .trade-id {{
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 2px;
+    }}
+    
+    /* Info box and list styling */
+    .analysis-note {{
+      background: rgba(0, 240, 153, 0.02);
+      border: 1px solid rgba(0, 240, 153, 0.15);
+      border-radius: 4px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: var(--ink);
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }}
+    .analysis-note b {{ color: var(--neon-emerald); }}
+    
+    .risk-list {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 8px;
+      margin: 12px 0;
+      padding: 0;
+      list-style: none;
+    }}
+    .risk-list li {{
+      padding: 8px 10px;
+      border: 1px solid rgba(255, 59, 105, 0.15);
+      border-radius: 4px;
+      color: #ffd2dc;
+      background: rgba(255, 59, 105, 0.03);
+      font-size: 11px;
+    }}
+    
+    textarea.research-report {{
+      width: 100%;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      color: #ffffff;
+      padding: 10px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.6;
+    }}
+    
+    .asset-tabs {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 15px;
+    }}
+    .asset-chip {{
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: var(--panel);
+      padding: 6px 10px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
-      overflow: auto;
-      padding-right: 2px;
+      min-width: 90px;
     }}
-    .side-card {{ padding: 14px; }}
-    .side-card.warning {{ background: #fff7f7; border-color: #f0cdcd; }}
-    .big-risk {{ font-size: 28px; font-weight: 900; margin-bottom: 8px; }}
-    .compact-status {{ color: var(--red); font-size: 20px; font-weight: 900; margin-bottom: 8px; }}
-    .split-row {{
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      padding: 8px 0;
-      border-bottom: 1px solid #edf2ef;
-      color: var(--muted);
-      font-size: 12px;
+    .asset-chip b {{ font-size: 12px; color: #ffffff; }}
+    .asset-chip span {{ color: var(--muted); font-size: 10px; }}
+    
+    /* Tab toggles */
+    input[name="dashboard-tab"] {{ display: none; }}
+    .tab-pane {{ display: none; }}
+    #tab-holdings:checked ~ .app-shell #pane-holdings {{ display: block; }}
+    #tab-backtest:checked ~ .app-shell #pane-backtest {{ display: block; }}
+    #tab-signals:checked ~ .app-shell #pane-signals {{ display: block; }}
+    #tab-risk:checked ~ .app-shell #pane-risk {{ display: block; }}
+    
+    #tab-holdings:checked ~ .app-shell .tabs-bar label[for="tab-holdings"],
+    #tab-backtest:checked ~ .app-shell .tabs-bar label[for="tab-backtest"],
+    #tab-signals:checked ~ .app-shell .tabs-bar label[for="tab-signals"],
+    #tab-risk:checked ~ .app-shell .tabs-bar label[for="tab-risk"] {{
+      color: var(--neon-emerald);
+      border-bottom: 2px solid var(--neon-emerald);
+      background: var(--neon-emerald-soft);
     }}
-    .split-row b {{ color: var(--ink); }}
-    .order-list {{ list-style: none; margin: 0; padding: 0; }}
-    .order-list li {{
-      display: grid;
-      grid-template-columns: 52px 1fr;
-      gap: 4px 8px;
-      padding: 8px 0;
-      border-bottom: 1px solid #edf2ef;
-      font-size: 12px;
+    
+    /* JavaScript Interactive State Row Toggle Styles */
+    .trade-done {{
+      opacity: 0.35;
+      text-decoration: line-through;
     }}
-    .order-list span {{ font-weight: 800; color: var(--ink); }}
-    .order-list b {{ text-align: right; color: var(--green); }}
-    .order-list small {{ grid-column: 2; text-align: right; color: var(--muted); }}
-    @media (max-width: 1180px) {{
-      .app-shell {{ grid-template-columns: 72px minmax(0, 1fr); }}
-      .execution-panel {{ position: static; height: auto; grid-column: 2; }}
-      .hero-content, .stress-grid {{ grid-template-columns: 1fr; }}
+    
+    /* Responsive media queries */
+    @media (max-width: 1100px) {{
+      .grid-2col {{ grid-template-columns: 1fr; }}
+      .top-kpi-banner {{ grid-template-columns: repeat(3, 1fr); }}
     }}
-    @media (max-width: 760px) {{
-      .app-shell {{ display: block; padding: 10px; }}
-      .left-nav {{ position: static; height: auto; display: flex; gap: 6px; margin-bottom: 10px; overflow-x: auto; }}
-      .brand-mark {{ margin: 0 8px 0 0; flex: 0 0 38px; }}
-      .nav-item {{ min-width: 64px; min-height: 48px; }}
-      .topbar {{ display: block; }}
-      .top-actions {{ margin-top: 10px; flex-wrap: wrap; }}
-      .asset-tabs, .grid, .metric-grid, .insight-strip, .risk-list, .table-grid {{ grid-template-columns: 1fr; }}
-      .chart {{ padding: 6px; }}
-      table {{ display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }}
-      .metric-table {{ min-width: 720px; }}
-      .compact-table {{ min-width: 620px; }}
-      .metric-table th, .metric-table td {{ white-space: nowrap; }}
-      .metric-table td:last-child, .metric-table th:last-child {{ white-space: normal; }}
+    @media (max-width: 768px) {{
+      .top-kpi-banner {{ grid-template-columns: repeat(2, 1fr); }}
+      .grid-1-1 {{ grid-template-columns: 1fr; }}
+      .app-shell {{ padding: 10px; }}
+      .tabs-bar {{ overflow-x: auto; white-space: nowrap; }}
+      table {{ display: block; overflow-x: auto; }}
     }}
   </style>
 </head>
 <body>
+  <input type="radio" id="tab-holdings" name="dashboard-tab" checked>
+  <input type="radio" id="tab-backtest" name="dashboard-tab">
+  <input type="radio" id="tab-signals" name="dashboard-tab">
+  <input type="radio" id="tab-risk" name="dashboard-tab">
+  
   <div class="app-shell">
-    <aside class="left-nav">
-      <div class="brand-mark">量</div>
-      <a class="nav-item" href="#update-summary"><span class="nav-icon">◎</span><span>摘要</span></a>
-      <a class="nav-item active" href="#risk-map"><span class="nav-icon">▦</span><span>風險</span></a>
-      <a class="nav-item" href="#backtest"><span class="nav-icon">↻</span><span>回測</span></a>
-      <a class="nav-item" href="#model"><span class="nav-icon">◎</span><span>建倉</span></a>
-      <a class="nav-item" href="#rebalance-calendar"><span class="nav-icon">◇</span><span>日曆</span></a>
-      <a class="nav-item" href="#trade-signals"><span class="nav-icon">⌁</span><span>訊號</span></a>
-      <a class="nav-item" href="#manual-trading"><span class="nav-icon">▣</span><span>交易</span></a>
-      <a class="nav-item" href="#orders"><span class="nav-icon">☑</span><span>執行</span></a>
-      <a class="nav-item" href="#issues"><span class="nav-icon">!</span><span>記錄</span></a>
-    </aside>
-    <main class="app-main">
-      <div class="topbar">
-        <div class="title-block">
-          <h1>【Antigravity】台灣股市投資量化模型</h1>
-          <p>今日 Dashboard 更新日期：{html.escape(dashboard_generated_date)}；行情/回测序列最新日期：{html.escape(dashboard_data_end)}。用 {html.escape(dashboard_data_start)} 至 {html.escape(dashboard_data_end)} 的台股资料，连接风险分析、模型盘建仓与调仓节奏。</p>
+    <div class="topbar">
+      <div class="title-block">
+        <h1>【Antigravity】台灣股市穩健量化終端</h1>
+        <p>模型建構基準日：{html.escape(model_portfolio.build_date if model_portfolio else DEFAULT_MODEL_BUILD_DATE)} | 數據更新時間：{html.escape(dashboard_generated_date)}</p>
+      </div>
+      <div class="top-actions">
+        <span>行情最新日: {html.escape(dashboard_data_end)}</span>
+        <button id="execution-check-button" class="action-button" type="button" aria-expanded="false" aria-controls="execution-check">手动执行检查</button>
+      </div>
+    </div>
+    
+    {execution_check_html}
+    
+    <div class="top-kpi-banner">
+      <div class="kpi-card">
+        <div class="kpi-label">總資產 (Total Value)</div>
+        <div class="kpi-value">{format_twd(total_value)}</div>
+        <div class="kpi-sub">初始虛擬資金: {format_twd(initial_cash)}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">未實現損益 (Unrealized PnL)</div>
+        <div class="kpi-value {pnl_class}">{format_twd(current_unrealized_pnl)}</div>
+        <div class="kpi-sub {pnl_class}">{format_percent(unrealized_pnl_pct, signed=True)}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">現金餘額 (Cash Reserve)</div>
+        <div class="kpi-value">{format_twd(remaining_cash)}</div>
+        <div class="kpi-sub">策略持倉比率: {format_percent(1.0 - (remaining_cash / total_value) if total_value else 0.0)}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">歷史最大回撤 (Max DD)</div>
+        <div class="kpi-value crimson-text">{format_percent(backtest_max_dd)}</div>
+        <div class="kpi-sub">Ledoit-Wolf 收縮模型</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">行情口径 / 时间</div>
+        <div class="kpi-value">{html.escape(portfolio_market_date)}</div>
+        <div class="kpi-sub">{market_mode_text} | {html.escape(model_portfolio.market_quote_time if model_portfolio and model_portfolio.market_quote_time else '13:30')}</div>
+      </div>
+    </div>
+    
+    <div class="asset-tabs">{asset_tabs_html}</div>
+    
+    <div class="tabs-bar">
+      <label class="tab-label" id="tab-lbl-holdings" for="tab-holdings">實時持倉 (Holdings)</label>
+      <label class="tab-label" id="tab-lbl-backtest" for="tab-backtest">策略回測 (Backtest)</label>
+      <label class="tab-label" id="tab-lbl-signals" for="tab-signals">調倉監控 (Signals)</label>
+      <label class="tab-label" id="tab-lbl-risk" for="tab-risk">風險歸因 (Risk Analysis)</label>
+    </div>
+    
+    <div class="tab-pane" id="pane-holdings">
+      <div class="grid-2col">
+        <div class="holdings-main">
+          {model_html}
         </div>
-        <div class="top-actions">
-          <span>今日更新 {html.escape(dashboard_generated_date)}</span>
-          <span>行情最新 {html.escape(dashboard_data_end)}</span>
-          <span>估计窗口 {backtest.window if backtest else DEFAULT_REBALANCE_WINDOW} 日</span>
-          <span>调仓间隔 {backtest.step if backtest else DEFAULT_REBALANCE_STEP} 日</span>
-          <button id="execution-check-button" class="action-button" type="button" aria-expanded="false" aria-controls="execution-check">手动执行检查</button>
+        <div class="holdings-side">
+          {order_sidebar_html}
         </div>
       </div>
-{execution_check_html}
-      <div class="asset-tabs">{asset_tabs_html}</div>
-
-      <section class="hero">
-        <div class="hero-content">
-          <div>
-            <div class="eyebrow">台灣股市穩健量化引擎</div>
-            <p class="lead">本仪表盘比较普通样本协方差与收缩协方差下的最小方差组合，并把手动模型盘执行状态固定在右侧，方便从研究结果走到建仓与复核。</p>
-            <div class="insight-strip">
-              <div class="insight"><b>最高相关资产对</b><span>{html.escape(max_pair_text)}</span></div>
-              <div class="insight"><b>集中度变化</b><span>{concentration_delta * 100:+.2f}%</span></div>
-              <div class="insight"><b>回撤差异</b><span>{drawdown_delta * 100:+.2f}%</span></div>
-            </div>
-          </div>
-          <div class="metric-grid">
-            <div class="card"><div class="metric hero-stat">{len(symbols)}</div><p class="metric-label">纳入分析资产数</p></div>
-            <div class="card"><div class="metric">{len(price_data.dates)}</div><p class="metric-label">共同交易日数量</p></div>
-            <div class="card"><div class="metric stress-number">{sample_dd.min() * 100:.2f}%</div><p class="metric-label">普通协方差最大回撤</p></div>
-            <div class="card"><div class="metric">{shrink_dd.min() * 100:.2f}%</div><p class="metric-label">收缩协方差最大回撤</p></div>
-          </div>
+    </div>
+    
+    <div class="tab-pane" id="pane-backtest">
+      {backtest_html}
+      {rebalance_execution_calendar_html}
+    </div>
+    
+    <div class="tab-pane" id="pane-signals">
+      {trade_signal_html}
+      {universe_strategy_html}
+    </div>
+    
+    <div class="tab-pane" id="pane-risk">
+      {group_risk_html}
+      {decision_summary_html}
+      {update_summary_html}
+      
+      <div class="grid-1-1">
+        <div class="panel chart">
+          <h2>Ledoit-Wolf 收縮協方差：相關性熱力圖</h2>
+          <div class="analysis-note"><b>熱力圖分析：</b>{html.escape(heatmap_advice)}</div>
+          {charts["heatmap"]}
         </div>
-      </section>
-
-{update_summary_html}
-
-{model_html}
-
-{rebalance_execution_calendar_html}
-
-{trade_signal_html}
-
-{decision_summary_html}
-
-{group_risk_html}
-
-{universe_strategy_html}
-
-      <section id="risk-map" class="section chart chart-wide">
-        <div class="analysis-note"><b>热力图分析：</b>{html.escape(heatmap_advice)}</div>
-        {charts["heatmap"]}
-      </section>
-      <section class="section grid">
         <div class="panel">
-          <h2>隐藏同源风险</h2>
-          <div class="analysis-note"><b>风险建议：</b>{html.escape(heatmap_advice)}</div>
+          <h2>高相關資產對 (同源風險檢測)</h2>
+          <div class="analysis-note"><b>風險建議：</b>把高相關資產視為同一風險來源，加碼時避免擴大同源部位。</div>
           <ul class="risk-list">{overlap_html}</ul>
         </div>
-        <div class="chart">
-          <div class="analysis-note"><b>风险贡献分析：</b>{html.escape(risk_advice)}</div>
+      </div>
+      
+      <div class="grid-1-1">
+        <div class="panel chart">
+          <h2>收縮協方差：最小方差風險貢獻</h2>
+          <div class="analysis-note"><b>風險貢獻分析：</b>{html.escape(risk_advice)}</div>
           {charts["risk_shrink"]}
         </div>
-      </section>
-      <section class="section grid">
-        <div class="chart">
-          <div class="analysis-note"><b>普通方差权重：</b>普通样本协方差更容易受近期价格波动影响，若单一权重明显偏高，应视为短期样本风险而非确定机会。</div>
-          {charts["weights_sample"]}
+        <div class="panel chart">
+          <h2>資產分配權重對比 (普通 vs 收縮)</h2>
+          <div class="analysis-note"><b>權重建議：</b>{html.escape(weight_advice)}</div>
+          <div class="grid-1-1">
+            {charts["weights_sample"]}
+            {charts["weights_shrink"]}
+          </div>
         </div>
-        <div class="chart">
-          <div class="analysis-note"><b>收缩方差权重：</b>{html.escape(weight_advice)}</div>
-          {charts["weights_shrink"]}
+      </div>
+      
+      <div class="grid-1-1">
+        <div class="panel chart">
+          <h2>組合歷史累計淨值走勢</h2>
+          <div class="analysis-note"><b>淨值走勢：</b>{html.escape(curve_advice)}</div>
+          {charts["curve"]}
         </div>
-      </section>
-      <section class="section chart">
-        <div class="analysis-note"><b>净值曲线分析：</b>{html.escape(curve_advice)}</div>
-        {charts["curve"]}
-      </section>
-      <section class="section chart">
-        <div class="analysis-note"><b>回撤曲线分析：</b>{html.escape(drawdown_advice)}</div>
-        {charts["drawdown"]}
-      </section>
-
-      <div id="backtest">{backtest_html}</div>
-
-      <section class="section panel stress-grid">
-        <div>
-          <h2>压力情境摘要</h2>
-          <p>规则情境：市场整体下跌 18%，波动率放大 1.8 倍，相关性向 1 收敛 35%。这是解释型压力测试，不代表真实未来损失。</p>
+        <div class="panel chart">
+          <h2>組合歷史回撤深度對比</h2>
+          <div class="analysis-note"><b>回撤走勢：</b>{html.escape(drawdown_advice)}</div>
+          {charts["drawdown"]}
         </div>
-        <div class="grid">
-          <div class="card"><div class="metric stress-number">{sample_stress * 100:.2f}%</div><p class="metric-label">普通协方差压力估计损失</p></div>
-          <div class="card"><div class="metric">{shrink_stress * 100:.2f}%</div><p class="metric-label">收缩协方差压力估计损失</p></div>
-        </div>
-      </section>
-
-      <section class="section panel">
-        <h2>组合明细</h2>
-        <div class="analysis-note"><b>权重与风险贡献总览：</b>{html.escape(weight_advice)} {html.escape(risk_advice)}</div>
-        <table>
-          <thead><tr><th>代码</th><th>名称</th><th>普通权重</th><th>收缩权重</th><th>普通风险贡献</th><th>收缩风险贡献</th></tr></thead>
-          <tbody>{rows}</tbody>
+      </div>
+      
+      <div class="panel">
+        <h2>組合歷史明細數據</h2>
+        <table class="metric-table">
+          <thead>
+            <tr>
+              <th>代碼</th>
+              <th>名稱</th>
+              <th>普通權重</th>
+              <th>收縮權重</th>
+              <th>普通風險貢獻</th>
+              <th>收縮風險貢獻</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows}
+          </tbody>
         </table>
-      </section>
-
-      <section id="issues" class="section panel issues">
-        <h2>数据问题记录</h2>
-        <ul>{issues_html}</ul>
-        <p class="footer-note">页面由本地脚本生成，不包含 API Key、Token 或交易权限。压力情境仅用于研究解释，不构成投资建议。</p>
-      </section>
-    </main>
-{order_sidebar_html}
+      </div>
+    </div>
+    
+    <section id="issues" class="panel issues">
+      <h2>終端日誌與異常記錄</h2>
+      <ul>{issues_html}</ul>
+      <p class="footer-note">頁面資料由本地 Antigravity 穩健優化器自動更新，不包含實盤交易憑證，僅作量化回測與模擬盤研究使用。</p>
+    </section>
   </div>
+  
   <script>
     (() => {{
       const button = document.getElementById("execution-check-button");
@@ -4336,7 +4551,9 @@ def render_dashboard(
         }});
       }}
 
-      const storageKey = "risk-dashboard-manual-trades-v2-{html.escape(model_portfolio.build_date if model_portfolio else DEFAULT_MODEL_BUILD_DATE)}-{html.escape(model_portfolio.market_date if model_portfolio and model_portfolio.market_date else 'no-market')}";
+      const buildDate = "{html.escape(model_portfolio.build_date if model_portfolio else DEFAULT_MODEL_BUILD_DATE)}";
+      const marketDate = "{html.escape(model_portfolio.market_date if model_portfolio and model_portfolio.market_date else 'no-market')}";
+      const storageKey = `risk-dashboard-manual-trades-v2-${{buildDate}}-${{marketDate}}`;
       const defaultTradeState = {default_trade_state_json};
       const readState = () => {{
         try {{
@@ -4357,7 +4574,6 @@ def render_dashboard(
         toggle.classList.toggle("done", done);
         document.querySelectorAll(`tr[data-trade-id="${{tradeId}}"]`).forEach((row) => {{
           row.classList.toggle("trade-done", done);
-          row.hidden = done;
         }});
       }};
       const applyTradeState = () => {{
@@ -4408,6 +4624,8 @@ def render_dashboard(
 </body>
 </html>"""
     output.write_text(page, encoding="utf-8")
+
+
 
 
 def main() -> None:

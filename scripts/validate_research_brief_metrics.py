@@ -8,9 +8,9 @@ from validate_research_brief_sync import DEFAULT_DASHBOARD, extract_research_bri
 
 
 EXPECTED_METRICS = {
-    "ai_weight_percent": "25.62%",
-    "risk_contribution_percent": "42.82%",
-    "risk_weight_gap_percent": "+17.20%",
+    "ai_weight_percent": "32.24%",
+    "risk_contribution_percent": "47.40%",
+    "risk_weight_gap_percent": "+15.17%",
     "trade_count": "3",
 }
 
@@ -24,7 +24,7 @@ def validate_metrics(dashboard_path: Path) -> dict[str, str]:
         "ai_weight_percent": r"AI 供应链权重 ([0-9.]+%)",
         "risk_contribution_percent": r"AI 供应链权重 [0-9.]+%，风险贡献 ([0-9.]+%)",
         "risk_weight_gap_percent": r"风险-权重差 ([+-][0-9.]+%)",
-        "trade_count": r"(?:已有|本轮有) (\d+) 笔(?:本日模拟调仓转为观察|待确认调仓)",
+        "trade_count": r"(?:已有|本轮有) (\d+) 笔(?:本日模拟调仓转为观察|待确认调仓)|本轮(没有)新的待确认调仓",
     }
 
     actual: dict[str, str] = {}
@@ -40,7 +40,10 @@ def validate_metrics(dashboard_path: Path) -> dict[str, str]:
         if not match:
             missing.append(key)
             continue
-        actual[key] = match.group(1)
+        val = match.group(1) or match.group(2)
+        if val in (None, "没有"):
+            val = "0"
+        actual[key] = val
         expected = EXPECTED_METRICS[key]
         if actual[key] != expected:
             mismatched.append(f"{key}:{actual[key]}!={expected}")
