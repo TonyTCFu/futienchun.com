@@ -3619,25 +3619,34 @@ def render_dashboard(
         current_market_total = sum(position.current_market_value or 0.0 for position in model_portfolio.positions)
         current_pnl_total = sum(position.unrealized_pnl or 0.0 for position in model_portfolio.positions)
         current_pnl_pct = current_pnl_total / total_buy_cost if total_buy_cost else 0.0
+        sidebar_market_date = model_portfolio.market_date or dashboard_data_end
+        sidebar_mode_label = "收盘定稿" if model_portfolio.market_mode == "close" else "盘中暂估" if model_portfolio.market_mode == "intraday" else "未套用今日行情"
+        sidebar_market_time = model_portfolio.market_quote_time or "等待快照"
         order_sidebar_html = f"""
       <aside id="orders" class="execution-panel">
         <div class="side-card warning">
           <p class="eyebrow-label">模型盘建仓</p>
           <h3>{html.escape(model_portfolio.build_date)}</h3>
-          <div class="big-risk">{execution_status}</div>
+          <div class="compact-status">{execution_status}</div>
           <p>{execution_hint}</p>
-        </div>
-        <div class="side-card">
-          <p class="eyebrow-label">Paper Trading</p>
           <div class="split-row"><span>虚拟资金</span><b>{format_twd(model_portfolio.initial_cash)}</b></div>
           <div class="split-row"><span>建仓比例</span><b>{format_percent(model_portfolio.invest_ratio)}</b></div>
           <div class="split-row"><span>策略现金池</span><b>{format_twd(model_portfolio.cash_reserve)}</b></div>
+        </div>
+        <div class="side-card">
+          <p class="eyebrow-label">目前更新情况</p>
+          <div class="split-row"><span>更新日期</span><b>{html.escape(sidebar_market_date)}</b></div>
+          <div class="split-row"><span>行情状态</span><b>{html.escape(sidebar_mode_label)}</b></div>
+          <div class="split-row"><span>快照时间</span><b>{html.escape(sidebar_market_time)}</b></div>
+          <div class="split-row"><span>回测最新日</span><b>{html.escape(dashboard_data_end)}</b></div>
           <div class="split-row"><span>买进总成本</span><b>{format_twd(total_buy_cost)}</b></div>
           <div class="split-row"><span>买进手续费</span><b>{format_twd(total_commission)}</b></div>
           <div class="split-row"><span>剩余现金</span><b>{format_twd(model_portfolio.remaining_cash)}</b></div>
           <div class="split-row"><span>收盘持仓市值</span><b>{format_twd(current_market_total)}</b></div>
           <div class="split-row"><span>未实现盈亏</span><b>{format_twd(current_pnl_total)}</b></div>
           <div class="split-row"><span>盈亏率</span><b>{format_percent(current_pnl_pct, signed=True)}</b></div>
+          <div class="split-row"><span>待确认调仓</span><b>{len(actionable_signals)} 笔</b></div>
+          <div class="split-row"><span>本日模拟成交</span><b>{execution_trade_count} 笔</b></div>
         </div>
         <div class="side-card">
           <p class="eyebrow-label">调仓周期</p>
@@ -4074,6 +4083,7 @@ def render_dashboard(
     .side-card {{ padding: 14px; }}
     .side-card.warning {{ background: #fff7f7; border-color: #f0cdcd; }}
     .big-risk {{ font-size: 28px; font-weight: 900; margin-bottom: 8px; }}
+    .compact-status {{ color: var(--red); font-size: 20px; font-weight: 900; margin-bottom: 8px; }}
     .split-row {{
       display: flex;
       justify-content: space-between;
