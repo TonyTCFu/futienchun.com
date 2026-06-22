@@ -53,7 +53,7 @@
 - 2026-06-22 已按用户要求在固定排程外即时补跑收盘日更：完整 public-close 重建耗时 `real 33.69`，页面仍为 `2026-06-22` 收盘定稿，模拟盘 3 笔卖出保持幂等无重复；研究摘要 QA 基线同步为 `34.38% / 49.90% / +15.52% / trade_count=3`。
 - 2026-06-17 回测区已新增滚动更新解释：当前回测覆盖 `2024-04-10 至 2026-06-16`，共 `74` 次调仓，最后一次重新计算权重日期为 `2026-05-28`。如果只补进 1 个可用交易日快照，回测曲线会更新到新日期，但不会新增 7 日调仓周期。
 - 2026-06-17 Dashboard 已新增“调仓与执行日历”：最后回测调仓日 `2026-05-28`，预计下次回测调仓 `2026-06-19`，距下次还差 `3` 个共同交易日；最后模拟盘执行日 `2026-06-16`，显示 `2317 卖出 10 股`、`1301 卖出 53 股`。回测调仓与模拟盘执行调仓必须分开解释，但都要出现在 Dashboard。
-- 2026-06-17 已创建 Codex 自动化 `dashboard`：每天 `18:40` 收盘后执行本地重建、模拟盘落账、远端推送、公网抓取验证，并在当前线程用中文回报结论。每日更新必须以公网 URL 验证作为完成条件。
+- 2026-06-17 已创建 Codex 自动化 `dashboard`，并在 2026-06-22 按用户偏好改为每天 `13:45` 固定更新：执行本地重建、模拟盘落账、远端推送、公网抓取验证，并在当前线程用中文回报结论。每日更新必须以公网 URL 验证作为完成条件。
 - 2026-06-17 本地模拟盘已落账 2 笔卖出：`2317 鴻海` 卖出 10 股、`1301 台塑` 卖出 53 股；重复执行正式重建时 `SIMULATED_TRADES` 新增 0 笔，`data/simulated_trades_2026-06-16.csv` 仍保持 2 笔，说明同批次幂等防重有效。
 - 2026-06-17 需保留一个重要区分：历史行情缓存本体尚未证明已完整刷新到 6 月中旬；当前已完成的是把最新可用 `2026-06-16` 市值档并入回测价格序列并重建 Dashboard。
 - 2026-06-08 已新增台股多因子收缩优化模型方法 `multi-factor-shrink`：使用中期动量、低波、回撤防御、流动性四类价格/量能因子生成保守预期收益，再搭配 Ledoit-Wolf 收缩协方差做仅做多、单一资产 25% 上限的目标权重。基本面 ROE/PE/殖利率暂未纳入，等待稳定数据源。
@@ -181,8 +181,8 @@
 - 2026-06-16 Shioaji 盘中每日更新已落地：生成 `data/model_portfolio_market_2026-06-16_intraday.csv`，15 檔全 ready，Dashboard 显示 6/16 盘中暂估；本地 QA 通过，但 QA 监控列表下一轮应从固定 6/8 改成自动识别当前市值档。
 - 2026-06-16 已把 `今日持仓与收盘盈亏`、`模拟盘调仓确认`、`策略监控与建议单` 前移到 Dashboard 上半段，打开首页先看到关键动作，再看到回测与图表。
 - `scripts/run_local_qa_checks.py` 已自动选取最新 `model_portfolio_market_*.csv`；`scripts/serve_dashboard.py` 与 `render.yaml` 已补好，可把生成后的 Dashboard 用标准库静态服务或 Render Web Service 挂出去。
-- 2026-06-16 已把公网服务升级成自动重建版：`scripts/serve_dashboard.py` 会在启动后先重建一次，再按 `Asia/Shanghai` 每天 `18:30` 继续重建；`--market-source public-close` 会用公开收盘价路径重建每日市值檔，并优先读取最新已生成的市值档。
-- 2026-06-16 Render 蓝图已同步默认环境变量：`DASHBOARD_TIMEZONE=Asia/Shanghai`、`DASHBOARD_REBUILD_TIME=18:30`、`DASHBOARD_REBUILD_COMMAND=python src/risk_dashboard.py --offline-cache --model-portfolio --model-build-date 2026-06-03 --model-method multi-factor-shrink --ai-tilt moderate --market-source public-close --market-mode close`。
+- 2026-06-16 已把公网服务升级成自动重建版：`scripts/serve_dashboard.py` 会在启动后先重建一次，再按 `Asia/Shanghai` 每天 `13:45` 继续重建；`--market-source public-close` 会用公开收盘价路径重建每日市值檔，并优先读取最新已生成的市值档。
+- 2026-06-16 Render 蓝图已同步默认环境变量：`DASHBOARD_TIMEZONE=Asia/Shanghai`、`DASHBOARD_REBUILD_TIME=13:45`、`DASHBOARD_REBUILD_COMMAND=python src/risk_dashboard.py --offline-cache --model-portfolio --model-build-date 2026-06-03 --model-method multi-factor-shrink --ai-tilt moderate --market-source public-close --market-mode close`。
 - 2026-06-16 已修正小屏表格排版：`metric-table` 与 `compact-table` 在手机宽度下改为横向滚动，避免中文名称在窄列里逐字换行成竖排，提升首屏可读性。
 - 2026-06-17 已进一步修正模型盘相关宽表的名称列：在持仓表、模拟盘调仓确认表、策略监控表的“名称”单元格加入 `name-cell` / `asset-name`，让名称保留最小宽度并以不换行元素渲染，避免 `00881`、`00919`、`2330` 这类中文名称在窄视口下被压成逐字竖排。
 - 2026-06-17 已用既有 `data/model_portfolio_market_2026-06-16_intraday.csv` 正式重建 Dashboard，当前 `dashboard/index.html` hash 为 `119a8e76857228d5749b74e62448ef6dc6989773be387ac1af904c79ae6ebaac`；`data/model_portfolio_latest.csv` 与 `data/model_portfolio_2026-06-03.csv` hash 同为 `1eccb9719d3ad944d3e4e5883b5b93a4f506139180497e25d4c61b10400e2b67`。

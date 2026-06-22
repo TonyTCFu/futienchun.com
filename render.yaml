@@ -9,6 +9,6 @@ services:
       - key: DASHBOARD_TIMEZONE
         value: Asia/Shanghai
       - key: DASHBOARD_REBUILD_TIME
-        value: "18:30"
+        value: "13:45"
       - key: DASHBOARD_REBUILD_COMMAND
         value: python src/risk_dashboard.py --data-source twse --model-portfolio --model-build-date 2026-06-03 --model-method multi-factor-shrink --ai-tilt moderate --market-source public-close --market-mode close --execute-simulated-trades

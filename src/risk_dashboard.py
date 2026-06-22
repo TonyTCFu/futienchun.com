@@ -36,6 +36,7 @@ DEFAULT_REBALANCE_WINDOW = 60
 DEFAULT_REBALANCE_STEP = 7
 DEFAULT_MODEL_CASH = 500_000.0
 DEFAULT_MODEL_INVEST_RATIO = 0.75
+DEFAULT_DASHBOARD_UPDATE_TIME_LABEL = "每日 13:45"
 MODEL_LOOKBACK_YEARS = 5
 MODEL_FALLBACK_LOOKBACK_YEARS = 2
 
@@ -3566,6 +3567,20 @@ def render_dashboard(
       <p class="footer-note">执行建议：先在本页面逐笔复核，再由脚本写入本地模拟成交 CSV。默认批次为 01，同一交易日、同一标的、同一方向重复落账会保持幂等；只有明确使用新的模拟成交批次号时，才视为同日分批。点击“重置状态”只恢复浏览器里的检查状态，不会送出、撤回或修改任何真实订单。</p>
     </section>
 """
+        market_mode_label = (
+            "收盘定稿"
+            if model_portfolio.market_mode == "close"
+            else "盘中暂估"
+            if model_portfolio.market_mode == "intraday"
+            else "未套用今日行情"
+        )
+        update_status_label = (
+            f"已按{DEFAULT_DASHBOARD_UPDATE_TIME_LABEL} 更新"
+            if model_portfolio.market_mode == "close"
+            else "台湾股市进行中"
+            if model_portfolio.market_mode == "intraday"
+            else "等待行情更新"
+        )
         model_html = f"""
     <section class="section panel">
       <h2>今日持仓与收盘盈亏</h2>
@@ -3574,7 +3589,8 @@ def render_dashboard(
         <div class="card"><div class="metric">{format_twd(model_portfolio.initial_cash)}</div><p class="metric-label">初始虚拟资金</p></div>
         <div class="card"><div class="metric">{format_percent(model_portfolio.invest_ratio)}</div><p class="metric-label">目标建仓比例</p></div>
         <div class="card"><div class="metric">{format_twd(model_portfolio.cash_reserve)}</div><p class="metric-label">策略现金池</p></div>
-        <div class="card"><div class="metric">{market_status}</div><p class="metric-label">今日行情状态</p></div>
+        <div class="card"><div class="metric">{html.escape(update_status_label)}</div><p class="metric-label">更新状态</p></div>
+        <div class="card"><div class="metric">{html.escape(market_mode_label)}</div><p class="metric-label">行情口径</p></div>
         <div class="card"><div class="metric">{html.escape(market_time_label)}</div><p class="metric-label">快照时间</p></div>
         <div class="card"><div class="metric hero-stat">{format_twd(target_total)}</div><p class="metric-label">目标配置金额</p></div>
         <div class="card"><div class="metric">{format_twd(current_market_total)}</div><p class="metric-label">当前持仓市值</p></div>
@@ -3620,7 +3636,6 @@ def render_dashboard(
         current_pnl_total = sum(position.unrealized_pnl or 0.0 for position in model_portfolio.positions)
         current_pnl_pct = current_pnl_total / total_buy_cost if total_buy_cost else 0.0
         sidebar_market_date = model_portfolio.market_date or dashboard_data_end
-        sidebar_mode_label = "收盘定稿" if model_portfolio.market_mode == "close" else "盘中暂估" if model_portfolio.market_mode == "intraday" else "未套用今日行情"
         sidebar_market_time = model_portfolio.market_quote_time or "等待快照"
         order_sidebar_html = f"""
       <aside id="orders" class="execution-panel">
@@ -3636,7 +3651,9 @@ def render_dashboard(
         <div class="side-card">
           <p class="eyebrow-label">目前更新情况</p>
           <div class="split-row"><span>更新日期</span><b>{html.escape(sidebar_market_date)}</b></div>
-          <div class="split-row"><span>行情状态</span><b>{html.escape(sidebar_mode_label)}</b></div>
+          <div class="split-row"><span>更新状态</span><b>{html.escape(update_status_label)}</b></div>
+          <div class="split-row"><span>行情口径</span><b>{html.escape(market_mode_label)}</b></div>
+          <div class="split-row"><span>自动排程</span><b>{html.escape(DEFAULT_DASHBOARD_UPDATE_TIME_LABEL)}</b></div>
           <div class="split-row"><span>快照时间</span><b>{html.escape(sidebar_market_time)}</b></div>
           <div class="split-row"><span>回测最新日</span><b>{html.escape(dashboard_data_end)}</b></div>
           <div class="split-row"><span>买进总成本</span><b>{format_twd(total_buy_cost)}</b></div>

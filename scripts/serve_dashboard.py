@@ -26,7 +26,7 @@ DEFAULT_HOST = "0.0.0.0"
 DEFAULT_PORT = 8000
 DEFAULT_USERNAME = "dashboard"
 DEFAULT_INDEX = ROOT / "dashboard" / "index.html"
-DEFAULT_REBUILD_TIME = "18:30"
+DEFAULT_REBUILD_TIME = "13:45"
 DEFAULT_REBUILD_TIMEZONE = "Asia/Shanghai"
 DEFAULT_REBUILD_COMMAND = [
     sys.executable,
@@ -137,7 +137,7 @@ def parse_time_of_day(value: str) -> time_of_day:
         hour = int(hour_text)
         minute = int(minute_text)
     except Exception as exc:
-        raise ValueError("重建时间必须是 HH:MM 格式，例如 18:30。") from exc
+        raise ValueError("重建时间必须是 HH:MM 格式，例如 13:45。") from exc
     if not (0 <= hour <= 23 and 0 <= minute <= 59):
         raise ValueError("重建时间必须落在 00:00 到 23:59 之间。")
     return time_of_day(hour=hour, minute=minute)
