@@ -1933,6 +1933,22 @@ def build_trade_signals(
     return signals
 
 
+def short_trade_reason(signal: TradeSignal) -> str:
+    if "已落账" in signal.reason:
+        return "已落账"
+    if signal.trigger_code == "market_loss_stop_25":
+        return "亏损止损"
+    if signal.trigger_code == "cost_or_trend_stop_25":
+        return "趋势转弱"
+    if signal.trigger_code == "profit_take_hot_20":
+        return "获利了结"
+    if signal.trigger_code == "pullback_add_15":
+        return "回落加码"
+    if signal.status == "observe":
+        return "继续观察"
+    return signal.reason[:10]
+
+
 def build_model_portfolio(
     assets: list[Asset],
     price_data: PriceData,
@@ -3464,7 +3480,8 @@ def render_dashboard(
                 f"<td>{html.escape(signal.symbol)}</td><td class=\"name-cell\"><span class=\"asset-name\">{html.escape(signal.name)}</span></td><td>{signal.latest_price:.2f}</td>"
                 f"<td>{format_optional_price(signal.cost_price)}</td><td>{signal.persistence_days}</td>"
                 f"<td>{'' if signal.return_since_entry is None else format_percent(signal.return_since_entry, signed=True)}</td>"
-                f"<td>{'' if signal.proposed_shares is None else f'{signal.proposed_shares:,}'}</td><td>{html.escape(signal.reason)}</td></tr>"
+                f"<td>{'' if signal.proposed_shares is None else f'{signal.proposed_shares:,}'}</td>"
+                f"<td title=\"{html.escape(signal.reason)}\">{html.escape(short_trade_reason(signal))}</td></tr>"
             )
             for signal in trade_signals
         )

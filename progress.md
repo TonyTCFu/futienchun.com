@@ -1,5 +1,32 @@
 # Loop Engineering Progress
 
+## 2026-06-22 策略监控原因短标签
+
+### Session Goal
+
+回应用户要求：“策略监控与建议单”的 `触发原因` 内容要简短，约 10 个字以内。
+
+### Actions
+
+- 已最小修改 `src/risk_dashboard.py`：新增 `short_trade_reason()`，把长原因映射为短标签，例如 `继续观察`、`已落账`、`亏损止损`、`趋势转弱`、`获利了结`、`回落加码`。
+- Dashboard 表格正文只显示短标签；完整长原因保留在 `title` 属性中，方便需要时 hover 查看，不影响策略规则、建议单、模拟盘落账或 QA 数字。
+- 已用正式 public-close 日更同口径重建 `dashboard/index.html`；本轮带 `--execute-simulated-trades`，模拟盘保持幂等，新增模拟成交 `0` 笔。
+
+### Verification Log
+
+- `./.venv/bin/python -m py_compile src/risk_dashboard.py scripts/serve_dashboard.py scripts/run_local_qa_checks.py` 通过。
+- `./.venv/bin/python scripts/run_local_qa_checks.py` 通过；关键数字仍为 `AI 供应链权重 34.38%`、`风险贡献 49.90%`、`风险-权重差 +15.52%`、`trade_count=3`。
+- 页面解析确认 `触发原因` 可见文本只剩 `继续观察` 与 `已落账`，最长 `4` 个字；完整长原因不再出现在表格可见正文，但仍存在于 `title`。
+- 本地浏览器验证 `#trade-signals`：`maxReasonLength=4`、`tableFits=true`、`sectionClearOfSide=true`。
+
+### Files Changed
+
+- `src/risk_dashboard.py`
+- `dashboard/index.html`
+- `data/model_portfolio_market_2026-06-22.csv`
+- `data/model_portfolio_market_2026-06-22_summary.txt`
+- `progress.md`
+
 ## 2026-06-22 策略监控表格修正
 
 ### Session Goal
