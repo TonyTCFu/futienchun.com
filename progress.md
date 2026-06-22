@@ -1,5 +1,49 @@
 # Loop Engineering Progress
 
+## 2026-06-22
+
+### Session Goal
+
+回答“台湾股市今天情况如何”，并把 Dashboard 加上当前更新摘要：今天市场、已做事项、目前状态与短期下一步。
+
+### Actions
+
+- 已读取 `AGENTS.md`、`progress.md`、`findings.md`、`.codex/PROJECT_CONTEXT.md`、`README.md` 和台股/Shioaji skill；本轮仍保持只读公开行情与本地模拟盘边界，未读取 `.env`、`.shioaji.local.env`、API key 或 token，未调用券商下单。
+- 已用 TWSE 官方公开资料确认 2026-06-22 台股状态：加权指数收 `47,741.51`，上涨 `1,276.31` 点、`+2.75%`，盘中区间 `46,679.57 - 47,871.19`；台积电收 `2,510`，上涨 `100`。
+- 已在 `src/risk_dashboard.py` 新增 `TaiexSnapshot` 与 TWSE 加权指数公开资料读取 helper，并在 Dashboard 顶部新增“今日市场与更新摘要”区块。
+- 新摘要区现在显示：今日台股、行情/回测最新日、模型盘市值日、待确认调仓、目前已经做了什么、未来短时间会做的事。
+- 已执行正式重建：`--market-source public-close --market-mode close --execute-simulated-trades`；Dashboard 行情/回测序列最新日期已推进到 `2026-06-22`。
+- 本地模拟盘本轮新增 `3` 笔卖出：`2317` 卖出 `5` 股、`2881` 卖出 `38` 股、`2882` 卖出 `39` 股；执行后 `2317` 剩 `15` 股、`2881` 剩 `151` 股、`2882` 剩 `156` 股。
+- Dashboard 摘要显示执行后的当前持仓市值 `NT$351,391`、未实现盈亏 `NT$13,768`，待确认调仓 `0` 笔；最后模拟盘执行日 `2026-06-22`，已落账模拟成交 `3` 笔。
+
+### Verification Log
+
+- `./.venv/bin/python -m py_compile src/risk_dashboard.py scripts/serve_dashboard.py scripts/run_local_qa_checks.py scripts/validate_research_brief_sync.py scripts/validate_research_brief_metrics.py` 通过。
+- 正式重建完成：`/usr/bin/time -p` 实测 `real 44.98`，成功生成正式 `dashboard/index.html`。
+- 页面检索通过：`今日市场与更新摘要`、`加权指数 2026-06-22 收 47,741.51`、`行情/回测序列最新日期：2026-06-22`、`模型盘市值日：2026-06-22`、`待确认调仓：0`、`预计下次回测调仓：2026-06-26`。
+- `./.venv/bin/python scripts/run_local_qa_checks.py` 通过，输出 `/tmp/tw_quant_local_qa_summary.md` 与 `/tmp/tw_quant_local_qa_summary.json`；关键数字仍为 `AI 供应链权重 34.46%`、`风险贡献 49.89%`、`风险-权重差 +15.43%`、`trade_count=3`。
+- iCloud Obsidian `台股量化基金.md` 已同步 Dashboard 研究摘要中随 6/22 行情微调的策略结构结论，确保同步检查继续通过。
+
+### Files Changed
+
+- `src/risk_dashboard.py`
+- `dashboard/index.html`
+- `data/model_portfolio_latest.csv`
+- `data/model_portfolio_2026-06-03.csv`
+- `data/model_portfolio_market_2026-06-22.csv`
+- `data/model_portfolio_market_2026-06-22_summary.txt`
+- `data/simulated_trades_2026-06-22.csv`
+- `data/simulated_positions_2026-06-22.csv`
+- `data/simulated_positions_latest.csv`
+- `progress.md`
+- `findings.md`
+- `.codex/PROJECT_CONTEXT.md`
+- iCloud Obsidian `台股量化基金.md`
+
+### Next Loop Recommendation
+
+- 下一个短期重点是继续观察是否在 `2026-06-26` 触发下一次回测调仓；若 AI 供应链风险贡献仍显著高于权重，应优先在摘要区保留风险提示，再决定是否调整模拟盘。
+
 ## 2026-06-21
 
 ### Session Goal

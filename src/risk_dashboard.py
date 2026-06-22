@@ -208,6 +208,17 @@ class MarketSnapshotUpdate:
 
 
 @dataclass(frozen=True)
+class TaiexSnapshot:
+    trade_date: str
+    open_index: float
+    high_index: float
+    low_index: float
+    close_index: float
+    change_points: float
+    change_pct: float
+
+
+@dataclass(frozen=True)
 class FactorScoreBreakdown:
     price_factor_score: float
     industry_ai_score: float
@@ -323,6 +334,49 @@ def twse_url(symbol: str, month: str) -> str:
         "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY"
         f"?date={month}01&stockNo={symbol}&response=json"
     )
+
+
+def twse_taiex_history_url(target_date: str) -> str:
+    compact_date = target_date.replace("-", "")
+    return f"https://www.twse.com.tw/rwd/zh/TAIEX/MI_5MINS_HIST?date={compact_date}&response=json"
+
+
+def parse_twse_number(value: str) -> float:
+    return float((value or "0").replace(",", "").strip())
+
+
+def twse_roc_date_to_iso(value: str) -> str:
+    year_text, month_text, day_text = value.split("/")
+    return f"{int(year_text) + 1911:04d}-{int(month_text):02d}-{int(day_text):02d}"
+
+
+def fetch_taiex_snapshot(target_date: str) -> TaiexSnapshot | None:
+    try:
+        import requests
+
+        response = requests.get(twse_taiex_history_url(target_date), timeout=REQUEST_TIMEOUT)
+        response.raise_for_status()
+        payload = response.json()
+        rows = payload.get("data") or []
+        if len(rows) < 2:
+            return None
+        latest_row = rows[-1]
+        previous_row = rows[-2]
+        close_index = parse_twse_number(latest_row[4])
+        previous_close = parse_twse_number(previous_row[4])
+        change_points = close_index - previous_close
+        change_pct = change_points / previous_close if previous_close else 0.0
+        return TaiexSnapshot(
+            trade_date=twse_roc_date_to_iso(latest_row[0]),
+            open_index=parse_twse_number(latest_row[1]),
+            high_index=parse_twse_number(latest_row[2]),
+            low_index=parse_twse_number(latest_row[3]),
+            close_index=close_index,
+            change_points=change_points,
+            change_pct=change_pct,
+        )
+    except Exception:
+        return None
 
 
 def parse_float(value: str) -> float | None:
@@ -3178,6 +3232,75 @@ def render_dashboard(
         top_signal_items = "<li>本轮没有新的待确认调仓；持仓维持观察，等待价格、趋势、RSI 或连续天数重新触发。</li>"
         trade_reason_summary = "本轮没有新的待确认调仓；当前更适合观察风险集中、回撤和压力情境。"
         trade_reason_boundary = "没有待确认单不代表风险解除，只代表本轮没有标的同时满足买入/卖出阈值。"
+    taiex_snapshot = fetch_taiex_snapshot(dashboard_generated_date)
+    if taiex_snapshot:
+        taiex_change_class = "positive" if taiex_snapshot.change_points >= 0 else "negative"
+        taiex_market_text = (
+            f"加权指数 {taiex_snapshot.trade_date} 收 {taiex_snapshot.close_index:,.2f}，"
+            f"{taiex_snapshot.change_points:+,.2f} 点、{format_percent(taiex_snapshot.change_pct, signed=True)}；"
+            f"盘中区间 {taiex_snapshot.low_index:,.2f} - {taiex_snapshot.high_index:,.2f}。"
+        )
+        taiex_cards = f"""
+          <div class="card"><div class="metric">{taiex_snapshot.close_index:,.2f}</div><p class="metric-label">加权指数收盘</p></div>
+          <div class="card"><div class="metric {taiex_change_class}">{taiex_snapshot.change_points:+,.2f}</div><p class="metric-label">加权指数涨跌点</p></div>
+          <div class="card"><div class="metric {taiex_change_class}">{format_percent(taiex_snapshot.change_pct, signed=True)}</div><p class="metric-label">加权指数涨跌幅</p></div>
+        """
+    else:
+        taiex_market_text = "TWSE 加权指数公开资料暂时无法读取；本区仍保留模型盘与行情序列状态。"
+        taiex_cards = """
+          <div class="card"><div class="metric">暂不可用</div><p class="metric-label">加权指数收盘</p></div>
+          <div class="card"><div class="metric">暂不可用</div><p class="metric-label">加权指数涨跌点</p></div>
+          <div class="card"><div class="metric">暂不可用</div><p class="metric-label">加权指数涨跌幅</p></div>
+        """
+    portfolio_market_date = model_portfolio.market_date if model_portfolio else dashboard_data_end
+    market_mode_text = (
+        "收盘定稿"
+        if model_portfolio and model_portfolio.market_mode == "close"
+        else "盘中暂估"
+        if model_portfolio and model_portfolio.market_mode == "intraday"
+        else "未套用今日行情"
+    )
+    current_market_value = sum((position.current_market_value or 0.0) for position in model_portfolio.positions) if model_portfolio else 0.0
+    current_unrealized_pnl = sum((position.unrealized_pnl or 0.0) for position in model_portfolio.positions) if model_portfolio else 0.0
+    update_actions = [
+        f"已刷新公开收盘价路径，Dashboard 行情/回测序列最新日期为 {dashboard_data_end}。",
+        f"已套用本地模型盘市值档 {portfolio_market_date}（{market_mode_text}），当前持仓市值 {format_twd(current_market_value)}，未实现盈亏 {format_twd(current_unrealized_pnl)}。",
+        f"已复核策略监控：待确认调仓 {len(actionable_signals)} 笔，已落账模拟成交 {execution_trade_count} 笔，红色卖出建议不会重复显示已落账标的。",
+    ]
+    next_steps = [
+        "下一交易日继续用公开收盘价刷新 Dashboard，并把公网首页正文作为发布完成标准。",
+        f"继续观察是否走满 {backtest.step if backtest else DEFAULT_REBALANCE_STEP} 个共同交易日；当前预计下次回测调仓为 {estimated_next_rebalance_date}。",
+        "短期重点看 AI 供应链风险贡献是否继续高于权重，并复核新的待确认调仓是否需要本地模拟盘落账。",
+    ]
+    update_summary_html = f"""
+      <section id="update-summary" class="section panel">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Today Brief</span>
+            <h2>今日市场与更新摘要</h2>
+          </div>
+          <span class="status-pill">当前状态 / 已做事项 / 短期下一步</span>
+        </div>
+        <div class="analysis-note"><b>今天台股：</b>{html.escape(taiex_market_text)}</div>
+        <div class="metric-grid backtest-grid">
+          {taiex_cards}
+          <div class="card"><div class="metric">{html.escape(dashboard_data_end)}</div><p class="metric-label">行情/回测最新日</p></div>
+          <div class="card"><div class="metric">{html.escape(portfolio_market_date)}</div><p class="metric-label">模型盘市值日</p></div>
+          <div class="card"><div class="metric">{len(actionable_signals)}</div><p class="metric-label">待确认调仓</p></div>
+        </div>
+        <div class="table-grid">
+          <div>
+            <h3>目前已经做了什么</h3>
+            <ul class="risk-list">{''.join(f'<li>{html.escape(item)}</li>' for item in update_actions)}</ul>
+          </div>
+          <div>
+            <h3>未来短时间会做的事</h3>
+            <ul class="risk-list">{''.join(f'<li>{html.escape(item)}</li>' for item in next_steps)}</ul>
+          </div>
+        </div>
+        <p class="footer-note">本区使用 TWSE 公开指数资料、本地公开收盘价缓存和模拟盘 CSV 生成；只用于研究与本地 paper portfolio 复核，不代表实盘委托或投资建议。</p>
+      </section>
+"""
     rebalance_execution_calendar_html = f"""
       <section id="rebalance-calendar" class="section panel">
         <div class="section-heading">
@@ -3999,6 +4122,7 @@ def render_dashboard(
   <div class="app-shell">
     <aside class="left-nav">
       <div class="brand-mark">量</div>
+      <a class="nav-item" href="#update-summary"><span class="nav-icon">◎</span><span>摘要</span></a>
       <a class="nav-item active" href="#risk-map"><span class="nav-icon">▦</span><span>風險</span></a>
       <a class="nav-item" href="#backtest"><span class="nav-icon">↻</span><span>回測</span></a>
       <a class="nav-item" href="#model"><span class="nav-icon">◎</span><span>建倉</span></a>
@@ -4044,6 +4168,8 @@ def render_dashboard(
           </div>
         </div>
       </section>
+
+{update_summary_html}
 
 {model_html}
 
