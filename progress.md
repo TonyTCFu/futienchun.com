@@ -1940,4 +1940,31 @@
 
 - 观察公网最终构建页面表现，如有微调需求可对移动端小屏幕下的字体和行间距做进一步紧凑适配。
 
+## 2026-06-23 第三十轮 统一 Cloudflare Pages 公网部署与发布流程固化
+
+### Session Goal
+
+统一公网访问为最稳定的 Cloudflare Pages (https://futienchun.com/dashboard/)，作废并移除 Render 免费实例，实现一键全自动 QA 校验与多仓 Git 推送发布。
+
+### Actions
+
+- **自动化脚本层**：新建 `scripts/publish_dashboard.py`。该脚本全自动执行：
+  1. 运行本地所有 QA 回归测试。
+  2. 将最新的 `dashboard/index.html` 拷贝至静态网站工作目录。
+  3. 执行 `portfolio-website` 仓库的 git add/commit/push，提交到 GitHub 以触发 Cloudflare Pages 的自动构建和公网刷新。
+  4. 执行主量化仓库 `台股量化Antigravity` 的 git add/commit/push，将最新的数据及策略代码全部推送到主仓库。
+- **配置清理层**：删除本地无用的 `render.yaml` 蓝图配置，并使用 `git remote remove dashboard` 删除了指向 Render 部署仓库的旧 remote。
+- **发布执行**：运行 `publish_dashboard.py`，成功完成两边的提交与推送。
+
+### Verification Log
+
+- 已执行 `./.venv/bin/python scripts/publish_dashboard.py`：
+  - QA 检查运行成功通过；
+  - 成功拷贝网页文件；
+  - 静态网页和主代码修改自动推送到各自的远程仓库。
+- 经测试，直接访问稳定公网链接 `https://futienchun.com/dashboard/`，新修改的紧凑双栏指标面板和可折叠终端日志均正常加载。
+
+### Next Loop Recommendation
+
+- 后续每日收盘更新流程中，在完成行情抓取与本地 Dashboard 重建后，可直接调用 `scripts/publish_dashboard.py` 进行全自动部署。
 

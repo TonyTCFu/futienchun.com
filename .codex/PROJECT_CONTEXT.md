@@ -186,7 +186,7 @@
 - 2026-06-16 已修正小屏表格排版：`metric-table` 与 `compact-table` 在手机宽度下改为横向滚动，避免中文名称在窄列里逐字换行成竖排，提升首屏可读性。
 - 2026-06-17 已进一步修正模型盘相关宽表的名称列：在持仓表、模拟盘调仓确认表、策略监控表的“名称”单元格加入 `name-cell` / `asset-name`，让名称保留最小宽度并以不换行元素渲染，避免 `00881`、`00919`、`2330` 这类中文名称在窄视口下被压成逐字竖排。
 - 2026-06-17 已用既有 `data/model_portfolio_market_2026-06-16_intraday.csv` 正式重建 Dashboard，当前 `dashboard/index.html` hash 为 `119a8e76857228d5749b74e62448ef6dc6989773be387ac1af904c79ae6ebaac`；`data/model_portfolio_latest.csv` 与 `data/model_portfolio_2026-06-03.csv` hash 同为 `1eccb9719d3ad944d3e4e5883b5b93a4f506139180497e25d4c61b10400e2b67`。
-- 2026-06-17 公网已先用 Render 免费实例上线：`https://futienchun-com-dashboard.onrender.com/`；服务 ID 为 `srv-d8onljk8aovs7385cqo0`；健康检查 `200`，公开页标题返回 `【Codex】台灣股市投資量化模型`。
-- 2026-06-17 免费实例会冷启动与睡眠；当前策略是先满足公网读取，再视稳定性决定是否升级付费档。
-- 当前多 Agent 最适合的下一步：QA/Reviewer 先读 `/tmp/tw_quant_local_qa_summary.json` 做机器汇总，Quant 与 Dashboard/Product 再分别判断是否需要趋势对比或页面关键文案回归；Data Pipeline 只在要更新新行情时启动。
-- 下一轮建议：继续汇总更多只读 QA 检查项；若继续追求 `<8s`，需先确认是否允许研究会改变数值结果的新求解器。
+- 2026-06-23 已作废并删除 Render 免费实例配置 `render.yaml` 及本地的 `dashboard` git 远程库，公网统一合并至最稳定的 Cloudflare Pages（`https://futienchun.com/dashboard/`）。
+- 2026-06-23 新增了一键发布脚本 `scripts/publish_dashboard.py`，该脚本在本地执行完整的 QA 回归测试通过后，自动将最新生成的 `dashboard/index.html` 复制到静态网页仓库，并自动推送 `futienchun.com` 主仓库和 `portfolio-website` 网页发布仓库，触发 Cloudflare 实时部署。
+- 下一轮建议：在进行每日行情日更（`src/risk_dashboard.py --market-source public-close`）重构本地 Dashboard 后，可以直接运行 `scripts/publish_dashboard.py` 触发一键发布。
+
