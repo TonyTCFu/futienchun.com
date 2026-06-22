@@ -3773,7 +3773,7 @@ def render_dashboard(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>【Codex】台灣股市投資量化模型</title>
+  <title>台灣股市</title>
   <style>
     :root {{
       --bg: #f4f8f6;
