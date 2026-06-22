@@ -34,7 +34,7 @@ REQUEST_TIMEOUT = 15
 SHIOAJI_KBARS_RETRIES = 3
 DEFAULT_REBALANCE_WINDOW = 60
 DEFAULT_REBALANCE_STEP = 7
-DEFAULT_MODEL_CASH = 500_000.0
+DEFAULT_MODEL_CASH = 300_000.0
 DEFAULT_MODEL_INVEST_RATIO = 0.75
 DEFAULT_DASHBOARD_UPDATE_TIME_LABEL = "每日 13:45"
 MODEL_LOOKBACK_YEARS = 5
@@ -1038,7 +1038,7 @@ def heatmap_figure(symbols: list[str], corr: np.ndarray) -> str:
             hovertemplate="%{y} × %{x}<br>相关性 %{z:.2f}<extra></extra>",
         )
     )
-    apply_dark_layout(fig, "【Codex】台灣股市投資量化模型：相關性熱力圖")
+    apply_dark_layout(fig, "【Antigravity】台灣股市投資量化模型：相關性熱力圖")
     return pio.to_html(fig, include_plotlyjs=True, full_html=False)
 
 
@@ -3773,7 +3773,7 @@ def render_dashboard(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>台灣股市Codex</title>
+  <title>台灣股市Antigravity</title>
   <style>
     :root {{
       --bg: #f4f8f6;
@@ -4209,7 +4209,7 @@ def render_dashboard(
     <main class="app-main">
       <div class="topbar">
         <div class="title-block">
-          <h1>【Codex】台灣股市投資量化模型</h1>
+          <h1>【Antigravity】台灣股市投資量化模型</h1>
           <p>今日 Dashboard 更新日期：{html.escape(dashboard_generated_date)}；行情/回测序列最新日期：{html.escape(dashboard_data_end)}。用 {html.escape(dashboard_data_start)} 至 {html.escape(dashboard_data_end)} 的台股资料，连接风险分析、模型盘建仓与调仓节奏。</p>
         </div>
         <div class="top-actions">
