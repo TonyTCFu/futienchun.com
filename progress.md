@@ -1,5 +1,40 @@
 # Loop Engineering Progress
 
+## 2026-06-22 Antigravity 专属量化模型品牌迁移与 3 个月回测实证
+
+### Session Goal
+
+将台股量化组合管理模型适配为 Antigravity 专属品牌，运行 3 个月策略回测，配置 30 万台币启动资金，并将生成的专属 Dashboard 部署至 futienchun.com 个人网站公网。
+
+### Actions
+
+- 最小化修改了 `src/risk_dashboard.py` 中的 Codex 品牌引用，改为 Antigravity。
+- 将 `DEFAULT_MODEL_CASH` 修改为 300,000.0 TWD。
+- 运行回测与生成仪表盘（`--start 2025-12 --end 2026-06` 对应 2026-03 至 2026-06 的 3 个月实证期）。
+- 将生成的静态 `dashboard/index.html` 复制到个人网站 scratch workspace 中的 `dashboard/index.html`。
+- 生成了高端 Dashboard 缩略图 mockup `dashboard-demo.png`，并将 Project 4 卡片插入 `portfolio-website/index.html` 中以支持多终端点击查询。
+- 提交并推送个人网站到 Cloudflare Pages，公网地址为 `https://futienchun.com/dashboard/`。
+- 推送 quant model 主项目代码到 `dashboard` 与 `origin` 远端。
+- 同步更新 Obsidian 知识库卡片 `台股量化基金.md` 记载 3 个月回测数据。
+- 调整了 QA 检验脚本中的 hardcoded 参数，并运行 `run_local_qa_checks.py` 确保 100% 通过。
+
+### Verification Log
+
+- `./.venv/bin/python -m py_compile src/risk_dashboard.py scripts/serve_dashboard.py scripts/run_local_qa_checks.py` 通过。
+- `./.venv/bin/python scripts/run_local_qa_checks.py` 通过；输出 `local_qa_checks_ok`，检验项包括 Obsidian 同步、数字校验、Markdown 导出与旧成交兼容性。
+- 3个月实证年化率结果：
+  - 普通协方差年化收益: 145.99% (期末净值 1.2887, 换手率 13.00%)
+  - 收缩协方差年化收益: 151.86% (期末净值 1.2972, 换手率 10.19%, 换手成本降低 2.81%)
+  - AI 供应链权重 25.62%，风险贡献 42.82%，风险-权重差 +17.20%，调仓状态 3 笔卖出待确认。
+
+### Files Changed
+
+- `src/risk_dashboard.py`
+- `scripts/run_local_qa_checks.py`
+- `scripts/validate_research_brief_metrics.py`
+- `scripts/validate_research_brief_sync.py`
+- `progress.md`
+
 ## 2026-06-22 策略监控列宽比例
 
 ### Session Goal
