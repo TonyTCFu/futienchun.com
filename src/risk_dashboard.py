@@ -3289,14 +3289,14 @@ def render_dashboard(
           <div class="card"><div class="metric">{html.escape(portfolio_market_date)}</div><p class="metric-label">模型盘市值日</p></div>
           <div class="card"><div class="metric">{len(actionable_signals)}</div><p class="metric-label">待确认调仓</p></div>
         </div>
-        <div class="update-summary-stack">
+        <div class="table-grid">
           <div>
             <h3>已执行</h3>
-            <ul class="risk-list">{''.join(f'<li>{html.escape(item)}</li>' for item in update_actions)}</ul>
+            <ul class="risk-list update-summary-list">{''.join(f'<li>{html.escape(item)}</li>' for item in update_actions)}</ul>
           </div>
           <div>
             <h3>短期行动计划</h3>
-            <ul class="risk-list">{''.join(f'<li>{html.escape(item)}</li>' for item in next_steps)}</ul>
+            <ul class="risk-list update-summary-list">{''.join(f'<li>{html.escape(item)}</li>' for item in next_steps)}</ul>
           </div>
         </div>
         <p class="footer-note">本区使用 TWSE 公开指数资料、本地公开收盘价缓存和模拟盘 CSV 生成；只用于研究与本地 paper portfolio 复核，不代表实盘委托或投资建议。</p>
@@ -4081,11 +4081,8 @@ def render_dashboard(
       gap: 14px;
       align-items: start;
     }}
-    .update-summary-stack {{
-      display: grid;
+    .update-summary-list {{
       grid-template-columns: 1fr;
-      gap: 18px;
-      align-items: start;
     }}
     .compact-table th, .compact-table td {{ padding: 8px 7px; }}
     .name-cell {{ min-width: 112px; }}
