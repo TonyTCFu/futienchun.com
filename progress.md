@@ -1892,3 +1892,26 @@
 ### Next Loop Recommendation
 
 - 下一轮可以把这份比较脚本接入可选 QA 分支，或把同样口径直接摘要到 Dashboard 的研究说明区。
+
+## 2026-06-22 第二十八轮 終端日誌與異常記錄可折疊樣式
+
+### Session Goal
+
+終端日誌與異常記錄显示框修正为可折叠样式，以解决大量日志导致 Dashboard 页面过长的问题。
+
+### Actions
+
+- **Python 逻辑层**：在 `src/risk_dashboard.py` 中，修改 `issues_html` 的生成逻辑。不再扁平列出所有日志，而是将日志按 `symbol` 分组，为每组生成一个嵌套的 `<details>/<summary>`。系统日志（如 `MODEL_PORTFOLIO`、`DATA`、`CACHE` 等）默认展开，个股的日志默认收起，以便突出重点。
+- **HTML 模板层**：在 `src/risk_dashboard.py` 的 HTML 模板中，将整个 `issues` 区块包裹在 `<details class="outer-issues-details">` 和 `<summary class="outer-issues-summary">` 内，实现外层整体折叠。
+- **CSS 样式层**：在 `<style>` 内追加了对折叠面板及其内部标签样式（如系统标签、股票标签、指示箭头旋转等）的专门 CSS 规则。
+
+### Verification Log
+
+- 已执行 `./.venv/bin/python -m py_compile src/risk_dashboard.py` 编译检查通过。
+- 已执行 `./.venv/bin/python src/risk_dashboard.py --start 2025-12 --end 2026-06 --offline-cache --model-portfolio` 重建 Dashboard，生成的文件 `dashboard/index.html` 完美嵌套折叠结构。
+- 已执行 `./.venv/bin/python scripts/run_local_qa_checks.py`，全部 QA 回归与 Obsidian 卡片数据一致性检查结果为 `PASS`。
+
+### Next Loop Recommendation
+
+- 后续如有需要，可为折叠面板增加动画过渡效果，或支持通过按钮一次性展开/收起所有日志分组。
+

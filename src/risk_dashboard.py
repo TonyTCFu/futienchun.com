@@ -3470,7 +3470,46 @@ def render_dashboard(
     overlap_html = "\n".join(
         f"<li>{html.escape(left)} 与 {html.escape(right)}：相关性 {value:.2f}</li>" for left, right, value in overlap_pairs
     ) or "<li>本期未发现相关性高于 0.75 的资产对。</li>"
-    issues_html = "\n".join(f"<li>{html.escape(issue.symbol)}: {html.escape(issue.message)}</li>" for issue in issues) or "<li>本轮未记录数据问题。</li>"
+    # Group issues by symbol and generate collapsible HTML
+    if not issues:
+        issues_html = "<li>本轮未记录数据问题。</li>"
+    else:
+        grouped_issues = {}
+        for issue in issues:
+            grouped_issues.setdefault(issue.symbol, []).append(issue.message)
+            
+        system_priority = {
+            "MODEL_PORTFOLIO": 0,
+            "DATA": 1,
+            "CACHE": 2,
+            "DAILY_MARKET": 3,
+            "BACKTEST": 4,
+        }
+        
+        sorted_symbols = sorted(grouped_issues.keys(), key=lambda s: (system_priority.get(s, 10), s))
+        
+        group_html_parts = []
+        for sym in sorted_symbols:
+            msgs = grouped_issues[sym]
+            li_items = "".join(f"<li>{html.escape(m)}</li>" for m in msgs)
+            is_system = sym in system_priority
+            tag_class = "sys-tag" if is_system else "stock-tag"
+            
+            group_html = f"""
+            <details class="issue-group-details" {"open" if is_system else ""}>
+              <summary class="issue-group-summary">
+                <span class="issue-group-title">
+                  <span class="issue-tag {tag_class}">{html.escape(sym)}</span>
+                  <span class="issue-count">{len(msgs)} 筆記錄</span>
+                </span>
+              </summary>
+              <ul class="issue-list-content">
+                {li_items}
+              </ul>
+            </details>
+            """
+            group_html_parts.append(group_html)
+        issues_html = "\n".join(group_html_parts)
     if backtest:
         sample_bt = backtest.sample_metrics
         shrink_bt = backtest.shrink_metrics
@@ -4370,6 +4409,114 @@ def render_dashboard(
       text-decoration: line-through;
     }}
     
+    /* Outer Collapsible Issues Box */
+    .outer-issues-details {{
+      border: none;
+      padding: 0;
+      margin: 0;
+    }}
+    .outer-issues-summary {{
+      cursor: pointer;
+      user-select: none;
+      outline: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }}
+    .outer-issues-summary::-webkit-details-marker {{
+      display: none;
+    }}
+    .outer-issues-summary::after {{
+      content: "▼";
+      font-size: 11px;
+      color: var(--muted);
+      transition: transform 0.2s ease;
+      margin-bottom: 12px;
+    }}
+    details[open].outer-issues-details .outer-issues-summary::after {{
+      transform: rotate(180deg);
+    }}
+    .outer-issues-content {{
+      margin-top: 10px;
+      padding-top: 15px;
+      border-top: 1px solid var(--line);
+    }}
+    
+    /* Grouped issue styles */
+    .issue-group-details {{
+      background: rgba(255, 255, 255, 0.01);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      margin-bottom: 8px;
+      padding: 8px 12px;
+      transition: background-color 0.2s;
+    }}
+    .issue-group-details:hover {{
+      background: rgba(255, 255, 255, 0.02);
+    }}
+    .issue-group-details[open] {{
+      background: rgba(255, 255, 255, 0.02);
+      border-color: rgba(255, 255, 255, 0.12);
+    }}
+    .issue-group-summary {{
+      cursor: pointer;
+      user-select: none;
+      outline: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }}
+    .issue-group-summary::-webkit-details-marker {{
+      display: none;
+    }}
+    .issue-group-summary::after {{
+      content: "▶";
+      font-size: 9px;
+      color: var(--muted);
+      transition: transform 0.15s ease;
+    }}
+    .issue-group-details[open] .issue-group-summary::after {{
+      transform: rotate(90deg);
+    }}
+    .issue-group-title {{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }}
+    .issue-tag {{
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+    }}
+    .issue-tag.sys-tag {{
+      background: var(--neon-emerald-soft);
+      color: var(--neon-emerald);
+      border: 1px solid rgba(0, 240, 153, 0.2);
+    }}
+    .issue-tag.stock-tag {{
+      background: rgba(255, 255, 255, 0.04);
+      color: #ffffff;
+      border: 1px solid var(--line);
+    }}
+    .issue-count {{
+      font-size: 11px;
+      color: var(--muted);
+    }}
+    .issue-list-content {{
+      margin: 10px 0 0 0;
+      padding-left: 20px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }}
+    .issue-list-content li {{
+      margin-bottom: 4px;
+      list-style-type: square;
+    }}
+    
     /* Responsive media queries */
     @media (max-width: 1100px) {{
       .grid-2col {{ grid-template-columns: 1fr; }}
@@ -4530,8 +4677,14 @@ def render_dashboard(
     </div>
     
     <section id="issues" class="panel issues">
-      <h2>終端日誌與異常記錄</h2>
-      <ul>{issues_html}</ul>
+      <details class="outer-issues-details">
+        <summary class="outer-issues-summary">
+          <h2>終端日誌與異常記錄</h2>
+        </summary>
+        <div class="outer-issues-content">
+          {issues_html}
+        </div>
+      </details>
       <p class="footer-note">頁面資料由本地 Antigravity 穩健優化器自動更新，不包含實盤交易憑證，僅作量化回測與模擬盤研究使用。</p>
     </section>
   </div>
