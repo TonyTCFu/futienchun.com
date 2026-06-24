@@ -189,4 +189,5 @@
 - 2026-06-23 已作废并删除 Render 免费实例配置 `render.yaml` 及本地的 `dashboard` git 远程库，公网统一合并至最稳定的 Cloudflare Pages（`https://futienchun.com/dashboard/`）。
 - 2026-06-23 新增了一键发布脚本 `scripts/publish_dashboard.py`，该脚本在本地执行完整的 QA 回归测试通过后，自动将最新生成的 `dashboard/index.html` 复制到静态网页仓库，并自动推送 `futienchun.com` 主仓库和 `portfolio-website` 网页发布仓库，触发 Cloudflare 实时部署。
 - 下一轮建议：在进行每日行情日更（`src/risk_dashboard.py --market-source public-close`）重构本地 Dashboard 后，可以直接运行 `scripts/publish_dashboard.py` 触发一键发布。
-
+- 2026-06-24 升级了 `src/risk_dashboard.py` 的 TWSE 抓取重试和跳过缓存逻辑，解决因 429 限流导致后几只股票无法同步最新行情的问题。成功将最新行情及本地模拟持仓更新至 2026-06-24 收盘，并一键推送到 Cloudflare Pages 公网。
+- 下一轮建议：继续监控收盘数据抓取的稳定性，若有新的建议单生成，按策略正常执行模拟盘交易。
