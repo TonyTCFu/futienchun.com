@@ -1,0 +1,8 @@
+﻿execution_date,symbol,name,buy_reference_price,shares,gross_amount,buy_commission_estimate,buy_tax_estimate,total_buy_cost,future_sell_tax_estimate,status
+2026-06-24,0050,元大台灣50,107.6000,266,28621.60,40.00,0.00,28661.60,28.00,simulated_position
+2026-06-24,0056,元大高股息,53.6000,699,37466.40,53.00,0.00,37519.40,37.00,simulated_position
+2026-06-24,006208,富邦台50,249.2000,120,29904.00,42.00,0.00,29946.00,29.00,simulated_position
+2026-06-24,00881,國泰台灣5G+,56.3000,436,24546.80,34.00,0.00,24580.80,24.00,simulated_position
+2026-06-24,2330,台積電,2430.0000,13,31590.00,45.00,0.00,31635.00,94.00,simulated_position
+2026-06-24,2454,聯發科,4455.0000,3,13365.00,20.00,0.00,13385.00,40.00,simulated_position
+2026-06-24,2412,中華電,143.0000,393,56199.00,80.00,0.00,56279.00,168.00,simulated_position

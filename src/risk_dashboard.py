@@ -474,41 +474,74 @@ def fetch_month(symbol: str, month: str, cache_dir: Path, allow_stale_cache: boo
     cache_dir.mkdir(parents=True, exist_ok=True)
     cache_path = cache_dir / f"{symbol}_{month}.json"
 
+    # 先读取并检查缓存是否已经包含今天的最新数据，以减少不必要的请求
+    from datetime import datetime
+    today = datetime.today()
+    roc_year = today.year - 1911
+    today_roc = f"{roc_year}/{today.month:02d}/{today.day:02d}"
+
+    cached_payload = None
+    if cache_path.exists():
+        try:
+            cached_payload = json.loads(cache_path.read_text(encoding="utf-8"))
+            if cached_payload and "data" in cached_payload and len(cached_payload["data"]) > 0:
+                last_date = cached_payload["data"][-1][0]
+                if last_date == today_roc:
+                    print(f"[TWSE] {symbol} {month} 缓存已包含今日收盘价 ({today_roc})，跳过联网下载。")
+                    return parse_twse_rows(cached_payload, symbol), f"{symbol} {month} 使用已是今日最新的本地缓存"
+        except Exception:
+            pass
+
     if offline_cache:
-        if cache_path.exists():
-            payload = json.loads(cache_path.read_text(encoding="utf-8"))
-            return parse_twse_rows(payload, symbol), f"{symbol} {month} 使用离线缓存"
+        if cached_payload:
+            return parse_twse_rows(cached_payload, symbol), f"{symbol} {month} 使用离线缓存"
         return None, f"{symbol} {month} 无离线缓存"
 
-    try:
-        import requests
+    # 联网抓取（包含重试和休眠）
+    max_retries = 3
+    retry_delay = 10.0
+    for attempt in range(1, max_retries + 1):
+        try:
+            import requests
+            import time
 
-        response = requests.get(twse_url(symbol, month), timeout=REQUEST_TIMEOUT)
-        response.raise_for_status()
-        payload = response.json()
-        if payload.get("stat") not in {"OK", "很抱歉，沒有符合條件的資料!"}:
-            raise ValueError(str(payload.get("stat")))
-        if payload.get("stat") != "OK":
-            if allow_stale_cache and cache_path.exists():
-                cached_payload = json.loads(cache_path.read_text(encoding="utf-8"))
-                return parse_twse_rows(cached_payload, symbol), f"{symbol} {month} 使用缓存：无新公开资料"
+            # 每次请求前休眠 3 秒
+            time.sleep(3.0)
+            response = requests.get(twse_url(symbol, month), timeout=REQUEST_TIMEOUT)
+            response.raise_for_status()
+            payload = response.json()
+            if payload.get("stat") not in {"OK", "很抱歉，沒有符合條件的資料!"}:
+                raise ValueError(str(payload.get("stat")))
+            if payload.get("stat") != "OK":
+                if allow_stale_cache and cached_payload:
+                    return parse_twse_rows(cached_payload, symbol), f"{symbol} {month} 使用缓存：无新公开资料"
+                cache_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+                return None, f"{symbol} {month} 无资料"
             cache_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-            return None, f"{symbol} {month} 无资料"
-        cache_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-        return parse_twse_rows(payload, symbol), None
-    except Exception as exc:
-        if cache_path.exists():
-            payload = json.loads(cache_path.read_text(encoding="utf-8"))
-            return parse_twse_rows(payload, symbol), f"{symbol} {month} 使用缓存：{exc}"
-        if allow_stale_cache:
-            merged: dict[str, MarketBar] = {}
-            stale_files = sorted(cache_dir.glob(f"{symbol}_*.json"))
-            for path in stale_files:
-                payload = json.loads(path.read_text(encoding="utf-8"))
-                merged.update(parse_twse_rows(payload, symbol))
-            if merged:
-                return merged, f"{symbol} 使用旧缓存：{exc}"
-        return None, f"{symbol} {month} 下载失败：{exc}"
+            return parse_twse_rows(payload, symbol), None
+        except Exception as exc:
+            print(f"[TWSE] 抓取 {symbol} {month} 第 {attempt} 次失败: {exc}")
+            if attempt < max_retries:
+                import time
+                print(f"[TWSE] 将于 {retry_delay} 秒后重试...")
+                time.sleep(retry_delay)
+            else:
+                print(f"[TWSE] 抓取 {symbol} {month} 失败且达到最大重试次数，将尝试使用本地缓存。")
+                if cached_payload:
+                    return parse_twse_rows(cached_payload, symbol), f"{symbol} {month} 使用缓存：{exc}"
+                if allow_stale_cache:
+                    merged: dict[str, MarketBar] = {}
+                    stale_files = sorted(cache_dir.glob(f"{symbol}_*.json"))
+                    for path in stale_files:
+                        try:
+                            stale_payload = json.loads(path.read_text(encoding="utf-8"))
+                            merged.update(parse_twse_rows(stale_payload, symbol))
+                        except Exception:
+                            pass
+                    if merged:
+                        return merged, f"{symbol} 使用旧缓存：{exc}"
+                return None, f"{symbol} {month} 下载失败：{exc}"
+
 
 
 def load_prices_from_twse(assets: Iterable[Asset], months: list[str], cache_dir: Path, allow_stale_cache: bool, offline_cache: bool) -> tuple[PriceData, list[DataIssue]]:
