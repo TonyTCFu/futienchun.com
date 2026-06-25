@@ -8,3 +8,16 @@
 [2026-06-26 00:20:11] 成功: scripts/sync_all_metrics.py 执行完毕。
 [2026-06-26 00:20:11] 输出片段: Updated run_local_qa_checks.py | Updated validate_research_brief_sync.py | Successfully updated Obsidian Note research brief!
 [2026-06-26 00:20:11] 开始执行: /Users/tonyfu/Documents/台股量化Antigravity/.venv/bin/python /Users/tonyfu/Documents/台股量化Antigravity/scripts/publish_dashboard.py
+[2026-06-26 00:20:23] 成功: scripts/publish_dashboard.py 执行完毕。
+[2026-06-26 00:20:23] 输出片段:  | === 发布流程执行完毕 === | Cloudflare Pages 稳定公网地址: https://futienchun.com/dashboard/
+[2026-06-26 00:20:23] === 每日自动化更新与部署全部成功完成 ===
+[2026-06-26 00:25:45] === 启动每日自动化更新 ===
+[2026-06-26 00:25:45] 开始执行: /Users/tonyfu/Documents/台股量化Antigravity/.venv/bin/python /Users/tonyfu/Documents/台股量化Antigravity/scripts/shioaji_sync_recent.py
+[2026-06-26 00:25:55] 成功: scripts/shioaji_sync_recent.py 执行完毕。
+[2026-06-26 00:25:55] 输出片段: 已成功更新缓存 2382_202606.json，当前共有 18 天数据。 |  | === 同步完成: 成功 15/15 档标的 ===
+[2026-06-26 00:25:55] 开始执行重建命令: /Users/tonyfu/Documents/台股量化Antigravity/.venv/bin/python src/risk_dashboard.py --start 2024-01 --end 2026-06 --offline-cache --model-portfolio --model-method multi-factor-shrink --ai-tilt moderate --market-source public-close --market-mode close --execute-simulated-trades
+[2026-06-26 00:26:00] 成功: risk_dashboard.py 重建完毕。
+[2026-06-26 00:26:00] 开始执行: /Users/tonyfu/Documents/台股量化Antigravity/.venv/bin/python /Users/tonyfu/Documents/台股量化Antigravity/scripts/sync_all_metrics.py
+[2026-06-26 00:26:00] 成功: scripts/sync_all_metrics.py 执行完毕。
+[2026-06-26 00:26:00] 输出片段: Updated run_local_qa_checks.py | Updated validate_research_brief_sync.py | Obsidian note sync is disabled. Skipping Obsidian update.
+[2026-06-26 00:26:00] 开始执行: /Users/tonyfu/Documents/台股量化Antigravity/.venv/bin/python /Users/tonyfu/Documents/台股量化Antigravity/scripts/publish_dashboard.py

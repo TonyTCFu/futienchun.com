@@ -89,26 +89,8 @@ def main() -> None:
     VALIDATE_SYNC.write_text(sync_py, encoding="utf-8")
     print("Updated validate_research_brief_sync.py")
 
-    # 5. Update Obsidian Note
-    if OBSIDIAN_NOTE.exists():
-        note_text = OBSIDIAN_NOTE.read_text(encoding="utf-8")
-        pattern = r"(## 七、最新研究摘要.*?）\n\n> \[\!note\] Dashboard 研究摘要\n)(.*?)(## 八、)"
-
-        brief_block = "\n".join(f"> {line}" for line in brief_lines) + "\n\n"
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        new_header = f"## 七、最新研究摘要（{today_str} 收盘定稿）\n\n> [!note] Dashboard 研究摘要\n"
-
-        def repl(m: re.Match) -> str:
-            return new_header + brief_block + m.group(3)
-
-        new_note_text, count = re.subn(pattern, repl, note_text, flags=re.S)
-        if count > 0:
-            OBSIDIAN_NOTE.write_text(new_note_text, encoding="utf-8")
-            print("Successfully updated Obsidian Note research brief!")
-        else:
-            print("Error: Could not locate the research brief section in Obsidian note.")
-    else:
-        print(f"Warning: Obsidian note {OBSIDIAN_NOTE} not found. Skipping Obsidian update.")
+    # 5. Update Obsidian Note (Disabled by user request)
+    print("Obsidian note sync is disabled. Skipping Obsidian update.")
 
 
 if __name__ == "__main__":

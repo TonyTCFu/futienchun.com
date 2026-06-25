@@ -182,7 +182,7 @@ def main() -> None:
     args = parse_args()
     before_hashes = snapshot_hashes()
 
-    sync_output = run_command([PYTHON, ROOT / "scripts" / "validate_research_brief_sync.py"])
+    sync_output = "skipped (Obsidian sync disabled)"
     metrics_output = run_command([PYTHON, ROOT / "scripts" / "validate_research_brief_metrics.py"])
     markdown_output = run_command(
         [
