@@ -3820,15 +3820,6 @@ def render_dashboard(
         sidebar_market_time = model_portfolio.market_quote_time or "等待快照"
         order_sidebar_html = f"""
       <aside id="orders" class="execution-panel">
-        <div class="side-card warning">
-          <p class="eyebrow-label">模型盘建仓</p>
-          <h3>{html.escape(model_portfolio.build_date)}</h3>
-          <div class="compact-status">{execution_status}</div>
-          <p>{execution_hint}</p>
-          <div class="split-row"><span>虚拟资金</span><b>{format_twd(model_portfolio.initial_cash)}</b></div>
-          <div class="split-row"><span>建仓比例</span><b>{format_percent(model_portfolio.invest_ratio)}</b></div>
-          <div class="split-row"><span>策略现金池</span><b>{format_twd(model_portfolio.cash_reserve)}</b></div>
-        </div>
         <div class="side-card">
           <p class="eyebrow-label">目前更新情况</p>
           <div class="split-row"><span>更新日期</span><b>{html.escape(sidebar_market_date)}</b></div>
@@ -3862,11 +3853,10 @@ def render_dashboard(
     else:
         order_sidebar_html = """
       <aside id="orders" class="execution-panel">
-        <div class="side-card warning">
-          <p class="eyebrow-label">模型盘建仓</p>
-          <h3>未生成</h3>
-          <div class="big-risk">待触发</div>
-          <p>使用 --model-portfolio 生成目标权重与待执行清单。</p>
+        <div class="side-card">
+          <p class="eyebrow-label">目前更新情况</p>
+          <h3>模型盘未生成</h3>
+          <p>使用 <code>--model-portfolio</code> 生成目标权重与待执行清单。</p>
         </div>
       </aside>
 """
