@@ -729,6 +729,7 @@ def latest_available_public_close_date(
     months: list[str],
     cache_dir: Path,
     allow_stale_cache: bool,
+    offline_cache: bool = False,
 ) -> tuple[str | None, list[DataIssue]]:
     """Refresh TWSE public-close data for the requested months and return the newest common date."""
     issues: list[DataIssue] = []
@@ -741,7 +742,7 @@ def latest_available_public_close_date(
                 month,
                 cache_dir=cache_dir,
                 allow_stale_cache=allow_stale_cache,
-                offline_cache=False,
+                offline_cache=offline_cache,
             )
             if issue:
                 issues.append(DataIssue(asset.symbol, issue))
@@ -5021,6 +5022,7 @@ def main() -> None:
                         months=refresh_months,
                         cache_dir=args.cache_dir,
                         allow_stale_cache=True,
+                        offline_cache=args.offline_cache,
                     )
                     issues.extend(refreshed_issues)
                     if refreshed_market_date:
