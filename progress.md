@@ -4,28 +4,31 @@
 
 ### Session Goal
 
-解决 TWSE 网络限流导致每日更新卡住的问题，修复 `src/risk_dashboard.py` 中的离线缓存参数传递 Bug，同步最新 2026-06-25 行情并一键部署至 Cloudflare Pages。
+解决 TWSE 网络限流导致每日更新卡住的问题，修复 `src/risk_dashboard.py` 中的离线缓存参数传递 Bug，同步最新 2026-06-25 行情并一键部署至 Cloudflare Pages。按照用户要求停用 Obsidian 同步，以防止多智能体模型混淆。
 
 ### Actions
 
 - 修复了 `src/risk_dashboard.py` 中 `latest_available_public_close_date()` 函数强制 `offline_cache=False` 的 Bug，支持参数透传，保证 `--offline-cache` 模式在运行 public-close 时完全不访问外网。
 - 通过 Shioaji 凭证读取与同步脚本成功补全 15 档资产 6 月份直至 2026-06-25 的日收盘价缓存。
 - 使用 `--offline-cache` 重新生成了 2026-06-25 市值档，并一键完成模拟盘无调仓交易落账（保持幂等）。
+- 按照用户要求停用了 Obsidian 自动同步，修改 `scripts/sync_all_metrics.py` 以跳过对 Obsidian 研究笔记文件的改写；同时修改 `scripts/run_local_qa_checks.py` 绕过 `validate_research_brief_sync.py` 检查。
 - 执行了 `scripts/sync_all_metrics.py` 将最新 AI 供应链权重（36.70%）、风险贡献（51.90%）与风险-权重差（+15.20%）同步至 QA 回归脚本。
 - 运行 `scripts/publish_dashboard.py` 进行 QA 完整回归，并将生成的 `dashboard/index.html` 成功推送到静态网页个人托管仓，部署至 Cloudflare Pages（https://futienchun.com/dashboard/），并把代码库推送到 `origin`。
 
 ### Verification Log
 
-- `./.venv/bin/python -m py_compile src/risk_dashboard.py` 编译通过。
+- `./.venv/bin/python -m py_compile src/risk_dashboard.py scripts/sync_all_metrics.py scripts/run_local_qa_checks.py` 编译通过。
 - 短区间离线冒烟测试（4秒内）和完整区间重建（3秒内）全部通过，确认网络不被限流卡死。
-- `./.venv/bin/python scripts/run_local_qa_checks.py` 成功输出 `local_qa_checks_ok`。
+- `./.venv/bin/python scripts/run_local_qa_checks.py` 成功输出 `local_qa_checks_ok` 并且 Obsidian 检查项显示为 skipped。
+- 运行 `scripts/auto_daily_update.py` 全链条测试通过，Obsidian 本地文件未被修改。
 - Git 提交与远程推送完成：静态网页托管库与主代码库均已同步。
 
 ### Files Changed
 
 - `src/risk_dashboard.py`
-- `scripts/validate_research_brief_metrics.py`
+- `scripts/sync_all_metrics.py`
 - `scripts/run_local_qa_checks.py`
+- `scripts/validate_research_brief_metrics.py`
 - `scripts/validate_research_brief_sync.py`
 - `progress.md`
 

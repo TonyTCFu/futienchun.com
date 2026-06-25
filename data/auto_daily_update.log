@@ -21,3 +21,6 @@
 [2026-06-26 00:26:00] 成功: scripts/sync_all_metrics.py 执行完毕。
 [2026-06-26 00:26:00] 输出片段: Updated run_local_qa_checks.py | Updated validate_research_brief_sync.py | Obsidian note sync is disabled. Skipping Obsidian update.
 [2026-06-26 00:26:00] 开始执行: /Users/tonyfu/Documents/台股量化Antigravity/.venv/bin/python /Users/tonyfu/Documents/台股量化Antigravity/scripts/publish_dashboard.py
+[2026-06-26 00:26:10] 成功: scripts/publish_dashboard.py 执行完毕。
+[2026-06-26 00:26:10] 输出片段:  | === 发布流程执行完毕 === | Cloudflare Pages 稳定公网地址: https://futienchun.com/dashboard/
+[2026-06-26 00:26:10] === 每日自动化更新与部署全部成功完成 ===

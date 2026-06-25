@@ -190,5 +190,5 @@
 - 2026-06-23 新增了一键发布脚本 `scripts/publish_dashboard.py`，该脚本在本地执行完整的 QA 回归测试通过后，自动将最新生成的 `dashboard/index.html` 复制到静态网页仓库，并自动推送 `futienchun.com` 主仓库和 `portfolio-website` 网页发布仓库，触发 Cloudflare 实时部署。
 - 下一轮建议：在进行每日行情日更（`src/risk_dashboard.py --market-source public-close`）重构本地 Dashboard 后，可以直接运行 `scripts/publish_dashboard.py` 触发一键发布。
 - 2026-06-24 升级了 `src/risk_dashboard.py` 的 TWSE 抓取重试和跳过缓存逻辑，解决因 429 限流导致后几只股票无法同步最新行情的问题。成功将最新行情及本地模拟持仓更新至 2026-06-24 收盘，并一键推送到 Cloudflare Pages 公网。
-- 2026-06-26 解决了 TWSE 网络限流导致每日更新卡住的问题：修复了 `src/risk_dashboard.py` 中 `latest_available_public_close_date()` 的 `offline_cache` 强制 False Bug，实现了真正的 `--offline-cache` 离线运行。通过 Shioaji API 成功抓取并补齐了截止 2026-06-25 收盘的缓存数据，完成 2026-06-25 收盘定稿 Dashboard 重建，QA 测试全部通过并成功一键推送到 Cloudflare Pages。
+- 2026-06-26 解决了 TWSE 网络限流导致每日更新卡住的问题：修复了 `src/risk_dashboard.py` 中 `latest_available_public_close_date()` 的 `offline_cache` 强制 False Bug，实现了真正的 `--offline-cache` 离线运行。通过 Shioaji API 成功抓取并补齐了截止 2026-06-25 收盘的缓存数据，完成 2026-06-25 收盘定稿 Dashboard 重建，QA 测试全部通过并成功一键推送到 Cloudflare Pages。按照用户要求，停用了 Obsidian 自动同步与同步验证机制。
 - 下一轮建议：继续监控每日行情抓取的稳定性，若有新调仓建议单生成则依策略执行模拟交易。
