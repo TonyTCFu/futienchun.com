@@ -1,0 +1,2 @@
+﻿trade_id,trade_date,symbol,name,action,shares,trade_price,gross_amount,fee,tax,net_amount,realized_cost,realized_pnl,remaining_shares,reason,status
+paper-20260709-2454-sell-01-899290a556,2026-07-09,2454,聯發科,sell,1,3925.0000,3925.00,6.00,12.00,3907.00,4461.67,-554.67,2,模拟盘连续收盘亏损超过约 6%，已连续观察至少 2 天，建议先减码 25%。,executed

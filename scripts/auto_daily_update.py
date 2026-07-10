@@ -58,7 +58,7 @@ def main():
     rebuild_args = [
         "src/risk_dashboard.py",
         "--start", "2024-01",
-        "--end", "2026-06",
+        "--end", datetime.now().strftime("%Y-%m"),
         "--offline-cache",
         "--model-portfolio",
         "--model-method", "multi-factor-shrink",
