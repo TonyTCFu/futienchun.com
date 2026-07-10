@@ -1,5 +1,35 @@
 # Loop Engineering Progress
 
+## 2026-07-10 恢复由于系统重启与硬编码导致中断的每日自动更新
+
+### Session Goal
+
+解决因服务器/系统重启导致的后台定时器丢失问题，并修复自动更新脚本中跨月限制的硬编码，恢复自 2026-06-26 以来的行情每日更新并一键发布，重新配置每日 13:45 的定时调度任务。
+
+### Actions
+
+- 检查发现系统重启将之前的 `schedule` 自动更新定时任务清空。
+- 修复 `scripts/auto_daily_update.py` 中 `--end` 参数硬编码为 `2026-06` 的限制，改为动态获取当前年月（本月为 `2026-07`）。
+- 重新运行 `scripts/auto_daily_update.py`，顺利补全了自 2026-06-26 至今的台股行情，生成了最新的 `model_portfolio_market_2026-07-09.csv` 市值文件。
+- 自动完成本地 QA 测试（Obsidian 同步保持跳过），成功将最新仪表盘 `dashboard/index.html` 一键部署至 Cloudflare Pages 静态网站。
+- 使用 `schedule` 注册了每日 13:45 触发的自动化更新 Cron 定时任务（`45 13 * * *`）。
+
+### Verification Log
+
+- 本地成功运行 `scripts/auto_daily_update.py` 流水线，日志确认行情同步、回测生成、QA 回归与 Git 推送部署全部成功完成。
+- 读取 `/tmp/tw_quant_local_qa_summary.json` 确认生成了 `model_portfolio_market_2026-07-09.csv`，且校验项全部 OK，当前 AI 供应链权重 36.75%，风险贡献 51.79%，风险-权重差 +15.04%，目前有 1 笔新的待确认调仓。
+- 确认公网静态网页已成功触发 Cloudflare Pages 构建发布。
+
+### Files Changed
+
+- `scripts/auto_daily_update.py`
+- `MEMORY.md`
+- `progress.md`
+
+### Next Loop Recommendation
+
+继续监控每日行情同步的稳定性，由用户在公网查看并核对这一笔新增的待确认模拟调仓，并注意在下一次服务器重启时及时检查并恢复 `schedule` 调度任务。
+
 ## 2026-06-26 修复离线数据更新与每日推送
 
 ### Session Goal

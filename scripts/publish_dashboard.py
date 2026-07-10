@@ -72,8 +72,14 @@ def main() -> None:
     try:
         shutil.copy2(MAIN_DASHBOARD, WEBSITE_DASHBOARD)
         print(f"已成功拷贝 {MAIN_DASHBOARD.name} 到 {WEBSITE_DASHBOARD}")
+        
+        # 写入 Cloudflare Pages 的 _headers 缓存控制配置
+        website_headers_file = WEBSITE_DIR / "_headers"
+        headers_content = "/dashboard/*\n  Cache-Control: no-cache, no-store, must-revalidate\n"
+        website_headers_file.write_text(headers_content, encoding="utf-8")
+        print(f"已成功生成并同步 {website_headers_file.name} 到 {website_headers_file.parent}")
     except Exception as exc:
-        print(f"错误: 拷贝网页文件失败: {exc}")
+        print(f"错误: 拷贝网页文件或生成 _headers 失败: {exc}")
         sys.exit(1)
 
     # 3. 提交并推送 Cloudflare Pages 静态网站仓库
@@ -84,7 +90,7 @@ def main() -> None:
         print("Cloudflare Pages 静态网站无任何文件改动，跳过推送。")
     else:
         # 添加并提交
-        run_command(["git", "add", "dashboard/index.html"], WEBSITE_DIR)
+        run_command(["git", "add", "dashboard/index.html", "_headers"], WEBSITE_DIR)
         today_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         commit_msg = f"deploy: sync dashboard updates on {today_str}"
         run_command(["git", "commit", "-m", commit_msg], WEBSITE_DIR)
