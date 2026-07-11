@@ -40,9 +40,15 @@
   - 针对旧版没有 `trade_id` 的模拟成交记录，采用交易日、标的和方向作为去重依据，在 Dashboard 中统一显示为“舊格式 2 筆”，避免被错误硬判为新批次。
 - **Obsidian 同步变更**:
   - 曾经接入 Obsidian 自动同步，但在 2026-06-26 遵循用户要求，**已完全停用 Obsidian 自动同步与同步验证机制**。
-- **服务器重启与硬编码月份停更问题**:
-  - 遇到系统/服务器重启时，后台配置的 Antigravity Schedule 定时任务会被清空，需要重新注册 Cron 定时器（`45 13 * * *`）。
+- **服务器重启与自动挂载方案**:
+  - 遇到系统/服务器重启时，后台配置的 Antigravity 内存级 Schedule 定时任务会被清空。
+  - **终极解决方案**：为了防止重启/关机导致定时器失效，已在 macOS 用户层注册了系统级 LaunchAgent (`com.tonyfu.tw_quant_daily_update.plist`)，配置在每天 `13:45` 自动执行 `scripts/auto_daily_update.py`。即便系统重启或关机，只要开机登录即可由 `launchd` 自动拉起，无需手动激活。
+- **硬编码月份限制导致停更**:
   - 曾因 `scripts/auto_daily_update.py` 中将重建参数硬编码为 `--end 2026-06` 导致跨月后行情停更，现已修改为动态获取当前月 `datetime.now().strftime("%Y-%m")`。
+- **公网缓存与即时刷新问题**:
+  - 为了保证在其他设备端能立刻看到最新的 Dashboard，采用了双重缓存清除方案：
+    1. 在 `src/risk_dashboard.py` 中为生成的 HTML `<head>` 加入 `Cache-Control: no-cache, no-store, must-revalidate`、`Pragma` 和 `Expires` 等 Meta 元标签。
+    2. 修改了 `scripts/publish_dashboard.py`，在同步发布时自动在静态网页仓库根目录下生成 Cloudflare Pages 识别的 `_headers` 配置文件，写入 `/dashboard/*` 下的所有资源返回 HTTP `Cache-Control` 强刷头，强制 CDN 及浏览器每次请求都进行最新验证。
 
 ---
 
