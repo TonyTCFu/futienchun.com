@@ -2,7 +2,7 @@
 
 ## 1. 前置项目信息
 - **项目名**: 台股稳健投资组合量化模型构建 (台股量化Antigravity)
-- **创建/更新日期**: 2026-07-10
+- **创建/更新日期**: 2026-07-13
 - **技术栈**: Python 3.x, NumPy, Pandas, QVeris, Shioaji, CSS/HTML
 - **包管理器**: pip (`requirements.txt`, 虚拟环境 `.venv/`)
 - **主要目录结构**:
@@ -43,12 +43,17 @@
 - **服务器重启与自动挂载方案**:
   - 遇到系统/服务器重启时，后台配置的 Antigravity 内存级 Schedule 定时任务会被清空。
   - **终极解决方案**：为了防止重启/关机导致定时器失效，已在 macOS 用户层注册了系统级 LaunchAgent (`com.tonyfu.tw_quant_daily_update.plist`)，配置在每天 `13:45` 自动执行 `scripts/auto_daily_update.py`。即便系统重启或关机，只要开机登录即可由 `launchd` 自动拉起，无需手动激活。
+- **自动网络重试与标记秒退机制**:
+  - 针对网络波动、休眠后唤醒等导致的 API 登录或 Git 推送超时，在 `scripts/auto_daily_update.py` 中引入了自动网络重试（最多重试 3 次，间隔 30 秒）。
+  - 为实现断线自动补更，配置了 LaunchAgent 每 30 分钟轮询一次。为避免频繁更新产生的 CPU 占用和冗余 git 推送，设计了成功日期标记文件 `data/.last_success_date`，今日已成功执行时可在 0.1 秒内快速退出。
 - **硬编码月份限制导致停更**:
   - 曾因 `scripts/auto_daily_update.py` 中将重建参数硬编码为 `--end 2026-06` 导致跨月后行情停更，现已修改为动态获取当前月 `datetime.now().strftime("%Y-%m")`。
 - **公网缓存与即时刷新问题**:
   - 为了保证在其他设备端能立刻看到最新的 Dashboard，采用了双重缓存清除方案：
     1. 在 `src/risk_dashboard.py` 中为生成的 HTML `<head>` 加入 `Cache-Control: no-cache, no-store, must-revalidate`、`Pragma` 和 `Expires` 等 Meta 元标签。
-    2. 修改了 `scripts/publish_dashboard.py`，在同步发布时自动在静态网页仓库根目录下生成 Cloudflare Pages 识别的 `_headers` 配置文件，写入 `/dashboard/*` 下的所有资源返回 HTTP `Cache-Control` 强刷头，强制 CDN 及浏览器每次请求都进行最新验证。
+    2. 修改了 `scripts/publish_dashboard.py`，在同步发布时自动在静态网页仓库根目录下生成 Cloudflare Pages 识别 of `_headers` 配置文件，写入 `/dashboard/*` 下的所有资源返回 HTTP `Cache-Control` 强刷头，强制 CDN 及浏览器每次请求都进行最新验证。
+- **不同脚本正则表达式提取冲突**:
+  - 曾因 `sync_all_metrics.py` 和 `validate_research_brief_metrics.py` 中用于从 HTML 提取 `trade_count` 的正则表达式存在匹配顺序分歧，导致在新一天数据无待确认交易时（已有历史交易转观察）解析不一致，引起 QA 崩溃。已将两个脚本的正则表达式统一。
 
 ---
 

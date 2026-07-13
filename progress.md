@@ -1,5 +1,40 @@
 # Loop Engineering Progress
 
+## 2026-07-13 异常自愈重试、防重秒退与正则解析冲突修复
+
+### Session Goal
+
+实现网络连接波动/断线恢复后的自动化重试机制；增加成功日期标记实现快速跳过防重复计算；修复两套脚本在没有待确认调仓时因正则表达式优先级引发的提取冲突，恢复并更新 2026-07-13 最新数据。
+
+### Actions
+
+- **网络超时自动重试**：在 `scripts/auto_daily_update.py` 中引入了重试执行器（对最依赖网络的 Shioaji 同步与 git 推送发布脚本，支持最多重试 3 次，间隔 30 秒）。
+- **成功日期标记防重秒退**：
+  - 定义了 `data/.last_success_date`。
+  - 在 `auto_daily_update.py` 启动时增加日期判断：如果是周末（周六日），或工作日且今天已更新成功，或者早于 13:45 且上一次已成功，均实现 0.1 秒秒退，避免重复拉取或冗余推送。
+  - 在 LaunchAgent plist 中将轮询时间由每天一次扩充为“每 30 分钟触发轮询一次”，配合 `RunAtLoad=true` 实现开机或断网恢复后自愈补更。
+- **正则提取冲突修复**：修改 `scripts/sync_all_metrics.py` 的 `trade_count` 正则表达式与逻辑，与 `validate_research_brief_metrics.py` 保持高度统一，解决了当出现“已转观察”但“无新调仓”时两脚本提取不一致导致本地 QA 中断的 Bug。
+- **更新同步与发布**：手动试跑修复后的自动更新流水线，成功补齐数据并部署至公网。
+
+### Verification Log
+
+- `scripts/auto_daily_update.py` 试跑日志证实：Shioaji 同步在第 1、2 次由于连接超时异常失败后，**在第 3 次自动重试时顺利登录同步成功**。
+- `sync_all_metrics.py` 正确将 `EXPECTED_METRICS` 的 `trade_count` 改写为 `"0"`。
+- `./.venv/bin/python scripts/run_local_qa_checks.py` 成功通过无报错。
+- 一键推送发布至 Cloudflare Pages 成功，写入今日成功标记 `2026-07-13`。
+- 确认生成最新市值文件 `data/model_portfolio_market_2026-07-13.csv`。
+
+### Files Changed
+
+- `scripts/auto_daily_update.py`
+- `scripts/sync_all_metrics.py`
+- `MEMORY.md`
+- `progress.md`
+
+### Next Loop Recommendation
+
+继续监控每日行情同步的自愈重试稳定表现。
+
 ## 2026-07-10 恢复由于系统重启与硬编码导致中断的每日自动更新（自启与防缓存优化）
 
 ### Session Goal

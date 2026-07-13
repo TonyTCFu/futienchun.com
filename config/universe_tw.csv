@@ -14,3 +14,7 @@ symbol,name,type,market,sector,theme,ai_supply_chain
 2882,國泰金,Stock,TWSE,金融,financial,false
 2412,中華電,Stock,TWSE,电信/防御,defensive,false
 2382,廣達,Stock,TWSE,电子制造/AI服务器链,ai-supply-chain,true
+2049,上銀,Stock,TWSE,精密机械/传动零部件,robotics,false
+3491,昇達科,Stock,TWSE,通信网络/微波毫米波元件,aerospace,false
+2313,華通,Stock,TWSE,电子制造/PCB,aerospace,false
+
