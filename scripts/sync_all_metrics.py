@@ -45,8 +45,15 @@ def main() -> None:
     risk_contrib = re.search(r"风险贡献 ([0-9.]+%)", ai_line).group(1)
     risk_gap = re.search(r"风险-权重差 ([+-][0-9.]+%)", ai_line).group(1)
 
-    trade_match = re.search(r"(?:已有|本轮有|本轮有新的) (\d+) 笔", trade_line)
-    trade_count = trade_match.group(1) if trade_match else "0"
+    trade_match = re.search(
+        r"(?:已有|本轮有) (\d+) 笔(?:本日模拟调仓转为观察|待确认调仓)|本轮(没有)新的待确认调仓",
+        trade_line
+    )
+    if trade_match:
+        val = trade_match.group(1) or trade_match.group(2)
+        trade_count = "0" if val in (None, "没有") else val
+    else:
+        trade_count = "0"
 
     print(
         f"Parsed Metrics: AI Weight={ai_weight}, Risk Contrib={risk_contrib}, Gap={risk_gap}, Trades={trade_count}"
