@@ -54,6 +54,12 @@
     2. 修改了 `scripts/publish_dashboard.py`，在同步发布时自动在静态网页仓库根目录下生成 Cloudflare Pages 识别 of `_headers` 配置文件，写入 `/dashboard/*` 下的所有资源返回 HTTP `Cache-Control` 强刷头，强制 CDN 及浏览器每次请求都进行最新验证。
 - **不同脚本正则表达式提取冲突**:
   - 曾因 `sync_all_metrics.py` 和 `validate_research_brief_metrics.py` 中用于从 HTML 提取 `trade_count` 的正则表达式存在匹配顺序分歧，导致在新一天数据无待确认交易时（已有历史交易转观察）解析不一致，引起 QA 崩溃。已将两个脚本的正则表达式统一。
+- **新股历史行情补齐与 Shioaji 30 天拉取限制**：
+  - 往股票池引入新资产时，必须补全自回测起点（2024-01-01）至当下的全量历史日线 JSON 缓存，否则回测矩阵合并会发生序列不完整报错。
+  - 由于部分台股上柜（OTC）股票（如 3491 昇達科）在第三方 QVeris / EODHD 数据源中缺失，降级改用 Shioaji 接口直接获取。
+  - 针对 Shioaji `api.kbars` 接口单次拉取区间不能超过 30 天的硬性物理限制，设计了“每 25 天一段”的自动分段拉取并合并的方案（`sync_historical_new_stocks_shioaji.py`），且内置了登录自愈重试，保证了数据拉取的完整性。
+
+
 
 ---
 

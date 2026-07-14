@@ -1,0 +1,3 @@
+﻿trade_id,trade_date,symbol,name,action,shares,trade_price,gross_amount,fee,tax,net_amount,realized_cost,realized_pnl,remaining_shares,reason,status
+paper-20260714-2454-sell-01-09b377d1dc,2026-07-14,2454,聯發科,sell,1,3660.0000,3660.00,5.00,11.00,3644.00,4461.66,-817.66,0,模拟盘连续收盘亏损超过约 6%，已连续观察至少 2 天，建议先减码 25%。,executed
+paper-20260714-2412-sell-01-883efff866,2026-07-14,2412,中華電,sell,74,133.0000,9842.00,14.00,29.00,9799.00,10597.06,-798.06,220,模拟盘连续收盘亏损超过约 6%，已连续观察至少 2 天，建议先减码 25%。,executed
