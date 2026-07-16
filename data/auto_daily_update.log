@@ -348,3 +348,7 @@ SDK NOTICE Tue Jul 14 13:48:34.823 2026 solClientSmf.c:7791                  (16
 [2026-07-16 20:48:46] 成功: scripts/sync_all_metrics.py 执行完毕。
 [2026-07-16 20:48:46] 输出片段: Updated run_local_qa_checks.py | Updated validate_research_brief_sync.py | Obsidian note sync is disabled. Skipping Obsidian update.
 [2026-07-16 20:48:46] 开始执行 (第 1/3 次尝试): /Users/tonyfu/Documents/台股量化Antigravity/.venv/bin/python /Users/tonyfu/Documents/台股量化Antigravity/scripts/publish_dashboard.py
+[2026-07-16 20:48:56] 成功: scripts/publish_dashboard.py 执行完毕。
+[2026-07-16 20:48:56] 输出片段:  | === 发布流程执行完毕 === | Cloudflare Pages 稳定公网地址: https://futienchun.com/dashboard/
+[2026-07-16 20:48:56] 已写入成功标记: 2026-07-16
+[2026-07-16 20:48:56] === 每日自动化更新与部署全部成功完成 ===

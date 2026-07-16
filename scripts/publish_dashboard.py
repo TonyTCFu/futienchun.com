@@ -78,8 +78,36 @@ def main() -> None:
         headers_content = "/dashboard/*\n  Cache-Control: no-cache, no-store, must-revalidate\n"
         website_headers_file.write_text(headers_content, encoding="utf-8")
         print(f"已成功生成并同步 {website_headers_file.name} 到 {website_headers_file.parent}")
+        
+        # 写入版本控制戳到静态主页中以穿透缓存
+        homepage_file = WEBSITE_DIR / "index.html"
+        if homepage_file.exists():
+            content = homepage_file.read_text(encoding="utf-8")
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            
+            # 1. 替换 /dashboard/index.html 链接 (兼容已有 v 参数或无 v 参数)
+            import re
+            content = re.sub(
+                r'href="/dashboard/index\.html(?:\?v=\d+)?"', 
+                f'href="/dashboard/index.html?v={timestamp}"', 
+                content
+            )
+            # 2. 替换 style.css?v=... 链接
+            content = re.sub(
+                r'href="style\.css(?:\?v=\d+)?"', 
+                f'href="style.css?v={timestamp}"', 
+                content
+            )
+            # 3. 替换 script.js?v=... 链接
+            content = re.sub(
+                r'src="script\.js(?:\?v=\d+)?"', 
+                f'src="script.js?v={timestamp}"', 
+                content
+            )
+            homepage_file.write_text(content, encoding="utf-8")
+            print(f"已成功为主导航 {homepage_file.name} 注入新版本戳: v={timestamp}")
     except Exception as exc:
-        print(f"错误: 拷贝网页文件或生成 _headers 失败: {exc}")
+        print(f"错误: 拷贝网页文件、生成 _headers 或更新主导航版本戳失败: {exc}")
         sys.exit(1)
 
     # 3. 提交并推送 Cloudflare Pages 静态网站仓库
@@ -89,8 +117,8 @@ def main() -> None:
     if not status_res.stdout.strip():
         print("Cloudflare Pages 静态网站无任何文件改动，跳过推送。")
     else:
-        # 添加并提交
-        run_command(["git", "add", "dashboard/index.html", "_headers"], WEBSITE_DIR)
+        # 添加并提交 (包含 index.html)
+        run_command(["git", "add", "dashboard/index.html", "_headers", "index.html"], WEBSITE_DIR)
         today_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         commit_msg = f"deploy: sync dashboard updates on {today_str}"
         run_command(["git", "commit", "-m", commit_msg], WEBSITE_DIR)
