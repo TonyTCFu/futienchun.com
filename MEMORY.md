@@ -49,9 +49,10 @@
 - **硬编码月份限制导致停更**:
   - 曾因 `scripts/auto_daily_update.py` 中将重建参数硬编码为 `--end 2026-06` 导致跨月后行情停更，现已修改为动态获取当前月 `datetime.now().strftime("%Y-%m")`。
 - **公网缓存与即时刷新问题**:
-  - 为了保证在其他设备端能立刻看到最新的 Dashboard，采用了双重缓存清除方案：
+  - 为了保证在其他设备端能立刻看到最新的 Dashboard，采用了三重缓存清除方案：
     1. 在 `src/risk_dashboard.py` 中为生成的 HTML `<head>` 加入 `Cache-Control: no-cache, no-store, must-revalidate`、`Pragma` 和 `Expires` 等 Meta 元标签。
-    2. 修改了 `scripts/publish_dashboard.py`，在同步发布时自动在静态网页仓库根目录下生成 Cloudflare Pages 识别 of `_headers` 配置文件，写入 `/dashboard/*` 下的所有资源返回 HTTP `Cache-Control` 强刷头，强制 CDN 及浏览器每次请求都进行最新验证。
+    2. 修改了 `scripts/publish_dashboard.py`，在同步发布时自动在静态网页仓库根目录下生成 Cloudflare Pages 识别的 `_headers` 配置文件，写入 `/dashboard/*` 下的所有资源返回 HTTP `Cache-Control` 强刷头，强制 CDN 及浏览器每次请求都进行最新验证。
+    3. 升级了 `scripts/publish_dashboard.py`，在发布时自动向个人网站主导航 `index.html` 中的跳转链接以及其外联静态 CSS/JS 资源链接注入最新的秒级版本号参数（例如 `href="/dashboard/index.html?v=YYYYMMDDHHMMSS"`）。当用户从主页点击跳转时，强制浏览器完全穿透本地和 CDN 缓存获取最新的渲染页面。
 - **不同脚本正则表达式提取冲突**:
   - 曾因 `sync_all_metrics.py` 和 `validate_research_brief_metrics.py` 中用于从 HTML 提取 `trade_count` 的正则表达式存在匹配顺序分歧，导致在新一天数据无待确认交易时（已有历史交易转观察）解析不一致，引起 QA 崩溃。已将两个脚本的正则表达式统一。
 - **新股历史行情补齐与 Shioaji 30 天拉取限制**：
