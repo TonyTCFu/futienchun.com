@@ -19,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CACHE_DIR = ROOT / "data" / "cache"
 DEFAULT_SHIOAJI_HOME = ROOT / ".shioaji.runtime"
-NEW_STOCKS = ["2049", "3491", "2313"]
+NEW_STOCKS = ["2049", "3491", "2313", "2308", "6285"]
 
 def shioaji_credentials() -> tuple[str, str]:
     env_file = ROOT / ".shioaji.local.env"
