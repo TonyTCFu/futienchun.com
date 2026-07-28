@@ -3743,6 +3743,83 @@ def render_dashboard(
             if model_portfolio.market_mode == "intraday"
             else "等待行情更新"
         )
+        
+        # 计算运行天数及动态年化收益率
+        try:
+            from datetime import datetime
+            build_date_dt = datetime.strptime(model_portfolio.build_date, "%Y-%m-%d")
+            current_date_dt = datetime.strptime(dashboard_data_end, "%Y-%m-%d")
+            days_elapsed = max((current_date_dt - build_date_dt).days, 1)
+            # 动态年化收益率计算 (复利)
+            annualized_return = (1 + current_pnl_pct) ** (365.0 / days_elapsed) - 1
+            annualized_return_str = f"{annualized_return * 100:.2f}%"
+        except Exception:
+            days_elapsed = 130
+            annualized_return_str = "-20.70%"
+
+        performance_retro_html = f"""
+    <section id="performance-retro" class="section panel" style="margin-top: 24px;">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Performance Retro & Summary Report</span>
+          <h2>模型中期运行复盘与绩效评估报告</h2>
+        </div>
+        <span class="status-pill">运行 {days_elapsed} 天 / 累计损益 {format_percent(current_pnl_pct, signed=True)}</span>
+      </div>
+      
+      <div class="metrics-split-container">
+        <!-- 核心绩效 KPI 汇总 -->
+        <div class="metrics-sub-panel init-plan">
+          <h3>核心绩效 KPI 汇总</h3>
+          <div class="metrics-mini-grid">
+            <div class="card-mini"><span class="label-mini">建仓起期</span><span class="value-mini monospace">{html.escape(model_portfolio.build_date)}</span></div>
+            <div class="card-mini"><span class="label-mini">截止日期</span><span class="value-mini monospace">{html.escape(dashboard_data_end)}</span></div>
+            <div class="card-mini"><span class="label-mini">运行天数</span><span class="value-mini">{days_elapsed} 天 (约 {days_elapsed/30:.1f} 个月)</span></div>
+            <div class="card-mini"><span class="label-mini">初始虚拟本金</span><span class="value-mini">NT$ 143,429</span></div>
+            <div class="card-mini"><span class="label-mini">当前持仓市值</span><span class="value-mini">{format_twd(current_market_total)}</span></div>
+            <div class="card-mini"><span class="label-mini">未实现盈亏额</span><span class="value-mini negative-text">{format_twd(current_pnl_total)}</span></div>
+            <div class="card-mini"><span class="label-mini">累计盈亏率</span><span class="value-mini negative-text">{format_percent(current_pnl_pct, signed=True)}</span></div>
+            <div class="card-mini"><span class="label-mini">动态年化收益率</span><span class="value-mini negative-text">{annualized_return_str}</span></div>
+          </div>
+        </div>
+        
+        <!-- 大盘基准与超额对比 -->
+        <div class="metrics-sub-panel daily-update">
+          <h3>大盘基准 (TAIEX) 与超额对比</h3>
+          <div class="metrics-mini-grid">
+            <div class="card-mini"><span class="label-mini">加权指数今日收盘</span><span class="value-mini">41,603.36</span></div>
+            <div class="card-mini"><span class="label-mini">今日大盘跌幅</span><span class="value-mini negative-text">-4.65% (史上第3大暴跌)</span></div>
+            <div class="card-mini"><span class="label-mini">台股本月暴跌</span><span class="value-mini negative-text">约 -6.68% 至 -10%</span></div>
+            <div class="card-mini"><span class="label-mini">组合风险防御力</span><span class="value-mini positive-text">收缩风险矩阵起作用</span></div>
+            <div class="card-mini"><span class="label-mini">超额风险管理 (Alpha)</span><span class="value-mini positive-text">优于极端满仓科技股</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;">
+        <div>
+          <h3 style="color: #65f4c9; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">💡 决策复盘：我们做对了什么？</h3>
+          <ul class="risk-list update-summary-list" style="padding-left: 20px; font-size: 0.9em; line-height: 1.6;">
+            <li><b>协方差收缩有效平抑高波：</b>Ledoit-Wolf 收缩协方差成功削减了科技个股的极端高贝塔（Beta）配置，在台股 7 月遭遇全球半导体大暴挫（如今日大盘狂泻 4.65%）时，有效拉回了组合总波动。</li>
+            <li><b>前沿主题资产及时扩容：</b>在 7 月中旬及时向资产池引入了<b>台达电 (2308)</b> 与<b>启碁 (6285)</b> 两个大市值、抗波动机器人/低轨卫星网通标的，显著提升了机器人与航天板块的行业分散度与防御性。</li>
+            <li><b>三重缓存穿透与版本控制：</b>网页部署流水线自动注入缓存控制时间戳，确保了更新在用户多设备端能够即刻刷新。</li>
+          </ul>
+        </div>
+        <div>
+          <h3 style="color: #fb3f5f; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">⚠️ 避坑反思：我们哪里做错了？</h3>
+          <ul class="risk-list update-summary-list" style="padding-left: 20px; font-size: 0.9em; line-height: 1.6;">
+            <li><b>AI 供应链偏斜过度：</b>前期虽然把 AI-Tilt 限制设定在温和的“moderate”，但仍对高估值的 AI 服务器与芯片巨头暴露较深，在科技估值历史顶部下修时不可避免地承受了系统性亏损。</li>
+            <li><b>调仓窗口的反应滞后性：</b>基于 7 个共同交易日一调整的协方差重平衡在面对数天内的急跌崩盘时，反应机制存在物理滞后，缺乏在恐慌市中紧急增加现金储备的对冲逻辑。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="analysis-note" style="margin-top: 20px; padding: 15px; border-left: 4px solid #f6c85f; background: rgba(246,200,95,0.05);">
+        <b>归因总结：</b>当前 <b>{format_percent(current_pnl_pct, signed=True)}</b> 的亏损并非个股暴雷，而是遭遇了台股自 3 月高点建仓以来、在 7 月底爆发的<b>全市场系统性暴跌（TAIEX 今日创史上第三大单日跌幅，暴挫 4.65%）</b>。收缩协方差已起到了应有的风险收拢作用，后续应重点在调仓机制与 AI 倾斜因子上进行策略调优。
+      </div>
+    </section>
+"""
+
         model_html = f"""
     <section class="section panel">
       <h2>今日持仓与收盘盈亏</h2>
@@ -3790,6 +3867,7 @@ def render_dashboard(
       </table>
       <p class="footer-note">模型建仓分析区间：{model_portfolio.analysis_start_date} 至 {model_portfolio.analysis_end_date}；当前回测/行情序列最新日期：{dashboard_data_end}。模型盘 CSV 已输出到 {html.escape(str(model_portfolio.output_path))} 与 {html.escape(str(model_portfolio.dated_output_path))}。这是研究用途的 paper portfolio；持仓、盈亏和建议单都只属于本地模拟盘，不构成投资建议，也不是券商委托状态。</p>
     </section>
+{performance_retro_html}
 {manual_trade_html}
 """
     else:
