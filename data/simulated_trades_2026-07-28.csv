@@ -1,0 +1,4 @@
+﻿trade_id,trade_date,symbol,name,action,shares,trade_price,gross_amount,fee,tax,net_amount,realized_cost,realized_pnl,remaining_shares,reason,status
+paper-20260728-0056-sell-01-cd69e7d30c,2026-07-28,0056,元大高股息,sell,131,48.1900,6312.89,9.00,6.00,6297.89,7031.53,-733.64,393,模拟盘连续收盘亏损超过约 6%，已连续观察至少 2 天，建议先减码 25%。,executed
+paper-20260728-006208-sell-01-6cdd653aeb,2026-07-28,006208,富邦台50,sell,23,222.1000,5108.30,7.00,5.00,5096.30,5739.65,-643.35,67,模拟盘连续收盘亏损超过约 6%，已连续观察至少 2 天，建议先减码 25%。,executed
+paper-20260728-00881-sell-01-8527cb71c0,2026-07-28,00881,國泰台灣5G+,sell,82,48.1400,3947.48,6.00,4.00,3937.48,4622.99,-685.51,245,模拟盘连续收盘亏损超过约 6%，已连续观察至少 2 天，建议先减码 25%。,executed

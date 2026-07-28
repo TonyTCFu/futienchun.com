@@ -44,9 +44,9 @@ def validate_sync(dashboard_path: Path, obsidian_note: Path) -> tuple[int, int]:
 
     required_fragments = [
         "## 八、Antigravity 专属量化模型",
-        "AI 供应链权重 28.06%",
-        "风险贡献 33.42%",
-        "风险-权重差 +5.36%",
+        "AI 供应链权重 28.20%",
+        "风险贡献 33.53%",
+        "风险-权重差 +5.33%",
         "不代表未来报酬预测",
         "实盘订单或券商账户状态",
     ]
