@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Iterable
+import warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 import numpy as np
 import plotly.graph_objects as go
