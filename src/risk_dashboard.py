@@ -3485,6 +3485,296 @@ def render_dashboard(
       </section>
 """
 
+    # === 每日简报 (Daily Summary Report) & KPI 仪表盘组装 ===
+    # 1. 计算个股最新单日回报率（红黑榜）
+    top_winners_html = ""
+    top_losers_html = ""
+    portfolio_today_return = 0.0
+    
+    if price_data and len(price_data.dates) >= 2:
+        prices_last = price_data.prices[-1]
+        prices_prev = price_data.prices[-2]
+        sym_rets = []
+        for i, sym in enumerate(symbols):
+            p_l = prices_last[i]
+            p_p = prices_prev[i]
+            if p_p > 0 and not np.isnan(p_l) and not np.isnan(p_p):
+                ret = (p_l - p_p) / p_p
+                sym_rets.append((sym, ret))
+            else:
+                sym_rets.append((sym, 0.0))
+        # 排序
+        sym_rets_sorted = sorted(sym_rets, key=lambda x: x[1], reverse=True)
+        winners = sym_rets_sorted[:3]
+        losers = sym_rets_sorted[-3:][::-1]
+        
+        # 组装 HTML
+        for sym, ret in winners:
+            name = asset_name.get(sym, '')
+            top_winners_html += f"""
+            <div class="ranking-item">
+              <span class="ranking-symbol"><b>{html.escape(sym)}</b> {html.escape(name)}</span>
+              <span class="ranking-value positive-text">+{format_percent(ret)}</span>
+            </div>
+            """
+        for sym, ret in losers:
+            name = asset_name.get(sym, '')
+            top_losers_html += f"""
+            <div class="ranking-item">
+              <span class="ranking-symbol"><b>{html.escape(sym)}</b> {html.escape(name)}</span>
+              <span class="ranking-value negative-text">{format_percent(ret, signed=True)}</span>
+            </div>
+            """
+            
+        # 计算组合本日预估收益率
+        if model_portfolio and len(model_portfolio.positions) > 0:
+            total_market_val = sum((pos.current_market_value or 0.0) for pos in model_portfolio.positions)
+            if total_market_val > 0:
+                weighted_ret_sum = 0.0
+                for pos in model_portfolio.positions:
+                    if pos.symbol in symbols:
+                        idx = symbols.index(pos.symbol)
+                        p_l = prices_last[idx]
+                        p_p = prices_prev[idx]
+                        if p_p > 0 and not np.isnan(p_l) and not np.isnan(p_p):
+                            ret = (p_l - p_p) / p_p
+                            weighted_ret_sum += ret * (pos.current_market_value or 0.0)
+                portfolio_today_return = weighted_ret_sum / total_market_val
+    else:
+        top_winners_html = "<div>无近期表现数据</div>"
+        top_losers_html = "<div>无近期表现数据</div>"
+
+    # 2. 计算组合核心量化 KPI 指标
+    kpi_sharpe_str = "暂无"
+    kpi_annual_return_str = "暂无"
+    kpi_max_dd_str = "暂无"
+    kpi_volatility_str = "暂无"
+    
+    if backtest:
+        metrics = backtest.shrink_metrics
+        kpi_annual_return_str = format_percent(metrics.annual_return)
+        kpi_max_dd_str = format_percent(abs(metrics.max_drawdown))
+        kpi_volatility_str = format_percent(metrics.annual_volatility)
+        if metrics.annual_volatility > 0:
+            sharpe = metrics.annual_return / metrics.annual_volatility
+            kpi_sharpe_str = f"{sharpe:.2f}"
+            
+    # 计算当前现金比例
+    remaining_cash = model_portfolio.remaining_cash if model_portfolio else 0.0
+    total_value = model_portfolio.total_value if model_portfolio else 0.0
+    cash_ratio = remaining_cash / total_value if total_value > 0 else 0.0
+    holding_ratio = 1.0 - cash_ratio
+    
+    kpi_holding_ratio_str = format_percent(holding_ratio)
+    
+    # TAIEX 涨跌幅
+    taiex_change_pct_str = "暂不可用"
+    if taiex_snapshot:
+        taiex_change_pct_str = format_percent(taiex_snapshot.change_pct, signed=True)
+        
+    portfolio_today_return_str = format_percent(portfolio_today_return, signed=True)
+    portfolio_today_class = "positive-text" if portfolio_today_return >= 0 else "negative-text"
+    taiex_today_class = ""
+    if taiex_snapshot:
+        taiex_today_class = "positive-text" if taiex_snapshot.change_pct >= 0 else "negative-text"
+
+    kpi_cards_html = f"""
+    <div class="kpi-report-grid">
+      <div class="kpi-report-card">
+        <span class="lbl">本日組合回報 (今日預估)</span>
+        <span class="val {portfolio_today_class}">{portfolio_today_return_str}</span>
+        <span class="sub">加權持倉收盤變動</span>
+      </div>
+      <div class="kpi-report-card">
+        <span class="lbl">本日大盤回報 (TAIEX)</span>
+        <span class="val {taiex_today_class}">{taiex_change_pct_str}</span>
+        <span class="sub">加權指數今日漲跌</span>
+      </div>
+      <div class="kpi-report-card">
+        <span class="lbl">策略夏普比率 (Sharpe)</span>
+        <span class="val font-mono" style="color: var(--neon-cyan);">{kpi_sharpe_str}</span>
+        <span class="sub">Ledoit-Wolf 收縮因子</span>
+      </div>
+      <div class="kpi-report-card">
+        <span class="lbl">策略年化收益率 (Ann.)</span>
+        <span class="val font-mono">{kpi_annual_return_str}</span>
+        <span class="sub">回測區間年化表現</span>
+      </div>
+      <div class="kpi-report-card">
+        <span class="lbl">歷史最大回撤 (Max DD)</span>
+        <span class="val font-mono negative-text">{kpi_max_dd_str}</span>
+        <span class="sub">回測期間最大回吐</span>
+      </div>
+      <div class="kpi-report-card">
+        <span class="lbl">資金策略持倉比率</span>
+        <span class="val font-mono" style="color: var(--orange);">{kpi_holding_ratio_str}</span>
+        <span class="sub">現金閒置餘額: {format_percent(cash_ratio)}</span>
+      </div>
+    </div>
+"""
+
+    # 3. 组装交易明细表格
+    trade_table_html = ""
+    if execution_summary and execution_summary.source_path and execution_summary.source_path.exists():
+        rows_list = []
+        try:
+            with execution_summary.source_path.open("r", encoding="utf-8-sig", newline="") as handle:
+                reader = csv.DictReader(handle)
+                for row in reader:
+                    if (row.get("status") or "").strip().lower() == "executed":
+                        sym = (row.get("symbol") or "").strip()
+                        name = asset_name.get(sym, '')
+                        act = (row.get("action") or "").strip().upper()
+                        shs_str = (row.get("shares") or "").strip()
+                        prc_str = (row.get("price") or "").strip()
+                        amt_str = (row.get("amount") or "").strip()
+                        t_date = (row.get("trade_date") or "").strip()
+                        
+                        act_lbl = "買入" if act == "BUY" else "賣出"
+                        act_cls = "action-buy" if act == "BUY" else "action-sell"
+                        
+                        try:
+                            shs = int(shs_str)
+                            shs_fmt = f"{shs:,}"
+                        except:
+                            shs_fmt = shs_str
+                        try:
+                            prc = float(prc_str)
+                            prc_fmt = f"{prc:.2f}"
+                        except:
+                            prc_fmt = prc_str
+                        try:
+                            amt = float(amt_str)
+                            amt_fmt = f"{amt:,.2f}"
+                        except:
+                            amt_fmt = amt_str
+                            
+                        rows_list.append(f"""
+                        <tr>
+                          <td>{t_date}</td>
+                          <td><b>{sym}</b> <span class="asset-name-small">{name}</span></td>
+                          <td><span class="action-badge {act_cls}">{act_lbl}</span></td>
+                          <td class="num-col">{shs_fmt} 股</td>
+                          <td class="num-col">${prc_fmt}</td>
+                          <td class="num-col font-mono">${amt_fmt}</td>
+                        </tr>
+                        """)
+        except Exception as exc:
+            trade_table_html = f"<div class='error-text'>加載交易明细失敗: {exc}</div>"
+            
+        if rows_list:
+            trade_table_html = f"""
+            <table class="dashboard-table trade-details-table">
+              <thead>
+                <tr>
+                  <th>交易日期</th>
+                  <th>標的</th>
+                  <th>方向</th>
+                  <th class="num-col">成交股數</th>
+                  <th class="num-col">成交均價</th>
+                  <th class="num-col">交易總金額 (TWD)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {"".join(rows_list)}
+              </tbody>
+            </table>
+            """
+        else:
+            trade_table_html = """
+            <div class="empty-trade-message">
+              <p>今日（或最近一交易日）無模擬調仓交易執行記錄。</p>
+            </div>
+            """
+    else:
+        trade_table_html = """
+        <div class="empty-trade-message">
+          <p>今日（或最近一交易日）無模擬調仓交易執行記錄。</p>
+        </div>
+        """
+
+    # 4. 组装每日报告 Tab 容器 HTML
+    daily_summary_report_html = f"""
+      <div class="summary-grid-container">
+        <!-- 左侧：报告总结 -->
+        <div class="panel">
+          <div class="section-heading">
+            <div>
+              <span class="eyebrow">Executive Summary</span>
+              <h2>每日量化研究報告 (Summary Report)</h2>
+            </div>
+            <span class="status-pill">{portfolio_market_date} / {market_mode_text}</span>
+          </div>
+          
+          <div class="analysis-note" style="margin-bottom: 15px;">
+            <b>今日大盤簡報：</b>{html.escape(taiex_market_text)}
+          </div>
+          
+          <div class="table-grid" style="margin-bottom: 20px;">
+            <div>
+              <h3 style="margin-top: 0; color: var(--neon-emerald);">已執行事項</h3>
+              <ul class="risk-list update-summary-list">{''.join(f'<li>{html.escape(item)}</li>' for item in update_actions)}</ul>
+            </div>
+            <div>
+              <h3 style="margin-top: 0; color: var(--neon-cyan);">後續行動計劃</h3>
+              <ul class="risk-list update-summary-list">{''.join(f'<li>{html.escape(item)}</li>' for item in next_steps)}</ul>
+            </div>
+          </div>
+          
+          <div class="section-heading" style="margin-top: 25px; border-bottom: 1px solid var(--line); padding-bottom: 8px;">
+            <h3>Obsidian 報告文字摘要</h3>
+          </div>
+          <div class="analysis-note" style="margin-top: 8px; font-size: 11px;">
+            以下純文本框已寫入本地 markdown，您可以一键複製並粘貼到您的 Obsidian 工作流或日誌中。
+          </div>
+          <textarea class="research-report" readonly rows="8" style="width:100%; font-size:11px; background:#070908; border-color:var(--line); padding:10px; margin-top:8px; border-radius:4px; color:var(--ink);">{html.escape(research_report_text)}</textarea>
+        </div>
+        
+        <!-- 右侧：KPI 与 红黑榜 -->
+        <div>
+          <!-- KPI 仪表盘 -->
+          <div class="panel" style="margin-bottom: 15px;">
+            <div class="section-heading" style="margin-bottom: 12px;">
+              <h3>核心量化 KPI 儀表盤</h3>
+            </div>
+            {kpi_cards_html}
+          </div>
+          
+          <!-- 红黑榜 -->
+          <div class="ranking-container">
+            <div class="ranking-title">
+              <span>今日標的表現紅榜 (Winners)</span>
+              <span class="positive-text" style="font-size: 10px;">▲ 漲幅前三</span>
+            </div>
+            {top_winners_html}
+          </div>
+          
+          <div class="ranking-container">
+            <div class="ranking-title">
+              <span>今日標的表現黑榜 (Losers)</span>
+              <span class="negative-text" style="font-size: 10px;">▼ 跌幅前三</span>
+            </div>
+            {top_losers_html}
+          </div>
+        </div>
+      </div>
+      
+      <!-- 下方：最新交易明细 -->
+      <div class="panel" style="margin-top: 15px;">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Simulated Transactions</span>
+            <h2>今日/最近模擬調仓交易明细</h2>
+          </div>
+          <span class="status-pill">落賬記錄日: {html.escape(execution_trade_date)}</span>
+        </div>
+        <div class="analysis-note">
+          <b>執行說明：</b>以下表格為本地模擬盤（Paper Portfolio）已寫入成交 CSV 的最新調倉記錄。買入與賣出動作僅供模型追蹤和回測校準使用，不具備任何實盤券商下單或交易接口屬性。
+        </div>
+        {trade_table_html}
+      </div>
+"""
+
     charts = {
         "heatmap": heatmap_figure(symbols, corr),
         "weights_sample": bar_figure("普通样本协方差：最小方差权重", labels, to_percent(sample_weights), ["#12304a", "#52d6ff"]),
@@ -4513,11 +4803,13 @@ def render_dashboard(
     /* Tab toggles */
     input[name="dashboard-tab"] {{ display: none; }}
     .tab-pane {{ display: none; }}
+    #tab-daily:checked ~ .app-shell #pane-daily {{ display: block; }}
     #tab-holdings:checked ~ .app-shell #pane-holdings {{ display: block; }}
     #tab-backtest:checked ~ .app-shell #pane-backtest {{ display: block; }}
     #tab-signals:checked ~ .app-shell #pane-signals {{ display: block; }}
     #tab-risk:checked ~ .app-shell #pane-risk {{ display: block; }}
     
+    #tab-daily:checked ~ .app-shell .tabs-bar label[for="tab-daily"],
     #tab-holdings:checked ~ .app-shell .tabs-bar label[for="tab-holdings"],
     #tab-backtest:checked ~ .app-shell .tabs-bar label[for="tab-backtest"],
     #tab-signals:checked ~ .app-shell .tabs-bar label[for="tab-signals"],
@@ -4526,6 +4818,142 @@ def render_dashboard(
       border-bottom: 2px solid var(--neon-emerald);
       background: var(--neon-emerald-soft);
     }}
+
+    /* Daily Summary Report custom styles */
+    .summary-grid-container {{
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 15px;
+      margin-bottom: 20px;
+    }}
+    @media (max-width: 900px) {{
+      .summary-grid-container {{
+        grid-template-columns: 1fr;
+      }}
+    }}
+    .kpi-report-grid {{
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 15px;
+    }}
+    .kpi-report-card {{
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }}
+    .kpi-report-card:hover {{
+      border-color: var(--border-glow);
+      background: var(--panel-hover);
+    }}
+    .kpi-report-card .val {{
+      font-size: 18px;
+      font-weight: bold;
+      font-family: var(--font-mono), monospace;
+      margin: 4px 0;
+    }}
+    .kpi-report-card .lbl {{
+      color: var(--muted);
+      font-size: 11px;
+    }}
+    .kpi-report-card .sub {{
+      font-size: 10px;
+      color: var(--muted);
+    }}
+    .ranking-container {{
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 15px;
+    }}
+    .ranking-title {{
+      font-size: 13px;
+      font-weight: bold;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 6px;
+    }}
+    .ranking-item {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.04);
+    }}
+    .ranking-item:last-child {{
+      border-bottom: none;
+    }}
+    .ranking-symbol {{
+      font-size: 12px;
+    }}
+    .ranking-symbol b {{
+      color: var(--ink);
+    }}
+    .ranking-value {{
+      font-family: var(--font-mono), monospace;
+      font-weight: bold;
+      font-size: 12px;
+    }}
+    .dashboard-table {{
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 12px;
+    }}
+    .dashboard-table th {{
+      background: rgba(255, 255, 255, 0.02);
+      color: var(--muted);
+      font-weight: 600;
+      border-bottom: 1px solid var(--line);
+      font-size: 11px;
+      padding: 8px 12px;
+    }}
+    .dashboard-table td {{
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      color: var(--ink);
+      padding: 8px 12px;
+    }}
+    .dashboard-table tr:hover td {{
+      background: rgba(255, 255, 255, 0.02);
+    }}
+    .action-badge {{
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: bold;
+    }}
+    .action-buy {{
+      background: var(--neon-emerald-soft);
+      color: var(--neon-emerald);
+    }}
+    .action-sell {{
+      background: var(--crimson-soft);
+      color: var(--crimson);
+    }}
+    .empty-trade-message {{
+      text-align: center;
+      color: var(--muted);
+      padding: 30px;
+      font-size: 12px;
+      background: rgba(255, 255, 255, 0.01);
+      border-radius: 8px;
+      border: 1px dashed var(--line);
+    }}
+    .asset-name-small {{
+      color: var(--muted);
+      font-size: 11px;
+      margin-left: 4px;
+    }}
+
     
     /* Responsive grids for cards */
     .metric-grid {{
@@ -4730,7 +5158,8 @@ def render_dashboard(
   </style>
 </head>
 <body>
-  <input type="radio" id="tab-holdings" name="dashboard-tab" checked>
+  <input type="radio" id="tab-daily" name="dashboard-tab" checked>
+  <input type="radio" id="tab-holdings" name="dashboard-tab">
   <input type="radio" id="tab-backtest" name="dashboard-tab">
   <input type="radio" id="tab-signals" name="dashboard-tab">
   <input type="radio" id="tab-risk" name="dashboard-tab">
@@ -4780,10 +5209,15 @@ def render_dashboard(
     <div class="asset-tabs">{asset_tabs_html}</div>
     
     <div class="tabs-bar">
+      <label class="tab-label" id="tab-lbl-daily" for="tab-daily">每日簡報 (Daily Summary)</label>
       <label class="tab-label" id="tab-lbl-holdings" for="tab-holdings">實時持倉 (Holdings)</label>
       <label class="tab-label" id="tab-lbl-backtest" for="tab-backtest">策略回測 (Backtest)</label>
       <label class="tab-label" id="tab-lbl-signals" for="tab-signals">調倉監控 (Signals)</label>
       <label class="tab-label" id="tab-lbl-risk" for="tab-risk">風險歸因 (Risk Analysis)</label>
+    </div>
+    
+    <div class="tab-pane" id="pane-daily">
+      {daily_summary_report_html}
     </div>
     
     <div class="tab-pane" id="pane-holdings">
