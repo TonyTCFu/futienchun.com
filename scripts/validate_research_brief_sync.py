@@ -11,7 +11,7 @@ DEFAULT_DASHBOARD = ROOT / "dashboard" / "index.html"
 DEFAULT_OBSIDIAN_NOTE = Path(
     "/Users/tonyfu/Library/Mobile Documents/iCloud~md~obsidian/Documents/"
     "AI-Knowledge-Wiki/02-The-Wiki/05-商业金融与量化交易/01-量化交易/"
-    "03-策略实践/台股量化基金.md"
+    "台股量化基金.md"
 )
 
 
