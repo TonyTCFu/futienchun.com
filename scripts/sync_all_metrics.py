@@ -99,9 +99,82 @@ def main() -> None:
     # 5. Update Obsidian Note
     if OBSIDIAN_NOTE.exists():
         note_text = OBSIDIAN_NOTE.read_text(encoding="utf-8")
+        
+        # 匹配 KPI
+        kpis = []
+        kpi_matches = re.finditer(
+            r'<div class="kpi-report-card">.*?<span class="lbl">(.*?)</span>.*?<span class="val [^>]*>(.*?)</span>.*?<span class="sub">(.*?)</span>',
+            html_text,
+            flags=re.S
+        )
+        for m in kpi_matches:
+            lbl = m.group(1).strip()
+            val = re.sub(r'<[^>]+>', '', m.group(2)).strip()
+            sub = re.sub(r'<[^>]+>', '', m.group(3)).strip()
+            kpis.append(f"| {lbl} | **{val}** | {sub} |")
+        kpi_table_md = "\n".join(kpis)
+
+        # 匹配红榜
+        winners_section = re.search(r'今日標的表現紅榜 \(Winners\)(.*?)</div>\s*</div>', html_text, flags=re.S)
+        winners_list = []
+        if winners_section:
+            w_items = re.finditer(r'<div class="ranking-item">.*?<span class="ranking-symbol"><b>(.*?)</b>\s*(.*?)</span>.*?<span class="ranking-value positive-text">(.*?)</span>', winners_section.group(1), flags=re.S)
+            for m in w_items:
+                winners_list.append(f"- 🔴 **{m.group(1)}** {m.group(2)} (`{m.group(3)}`)")
+        winners_md = "\n".join(winners_list) if winners_list else "- (無)"
+
+        # 匹配黑榜
+        losers_section = re.search(r'今日標的表現黑榜 \(Losers\)(.*?)</div>\s*</div>', html_text, flags=re.S)
+        losers_list = []
+        if losers_section:
+            l_items = re.finditer(r'<div class="ranking-item">.*?<span class="ranking-symbol"><b>(.*?)</b>\s*(.*?)</span>.*?<span class="ranking-value negative-text">(.*?)</span>', losers_section.group(1), flags=re.S)
+            for m in l_items:
+                losers_list.append(f"- 🟢 **{m.group(1)}** {m.group(2)} (`{m.group(3)}`)")
+        losers_md = "\n".join(losers_list) if losers_list else "- (無)"
+
+        # 匹配交易明细
+        trade_tbody_match = re.search(r'<table class="dashboard-table trade-details-table">.*?<tbody>(.*?)</tbody>', html_text, flags=re.S)
+        trade_rows = []
+        if trade_tbody_match:
+            tr_matches = re.finditer(
+                r'<tr>\s*<td>(.*?)</td>\s*<td><b>(.*?)</b>\s*<span class="asset-name-small">(.*?)</span></td>\s*<td><span class="action-badge [^>]*>(.*?)</span></td>\s*<td class="num-col">(.*?)</td>\s*<td class="num-col">(.*?)</td>\s*<td class="num-col font-mono">(.*?)</td>\s*</tr>',
+                trade_tbody_match.group(1),
+                flags=re.S
+            )
+            for m in tr_matches:
+                trade_rows.append(f"| {m.group(1)} | {m.group(2)} {m.group(3)} | {m.group(4)} | {m.group(5)} | {m.group(6)} | {m.group(7)} |")
+        
+        trade_table_md = ""
+        if trade_rows:
+            trade_table_md = "\n".join([
+                "| 交易日期 | 標的 | 方向 | 成交股數 | 成交均價 | 交易總金額 |",
+                "| --- | --- | --- | ---: | ---: | ---: |",
+                *trade_rows
+            ])
+        else:
+            trade_table_md = "*今日無模擬調倉交易。*"
+
+        # 拼接 Obsidian 版面
+        structure_block = f"""
+
+### 📊 核心量化 KPI 儀表盤
+| 指標 | 數值 | 說明 |
+| --- | ---: | --- |
+{kpi_table_md}
+
+### 📈 本日標的表現 (紅黑榜)
+- **漲幅前三名 (Winners)**：
+{winners_md}
+- **跌幅前三名 (Losers)**：
+{losers_md}
+
+### 📝 今日模擬調倉交易明細
+{trade_table_md}
+"""
+
         pattern = r"(## 七、最新研究摘要.*?）\n\n> \[\!note\] Dashboard 研究摘要\n)(.*?)(## 八、)"
 
-        brief_block = "\n".join(f"> {line}" for line in brief_lines) + "\n\n"
+        brief_block = "\n".join(f"> {line}" for line in brief_lines) + "\n\n" + structure_block
         today_str = datetime.now().strftime("%Y-%m-%d")
         new_header = f"## 七、最新研究摘要（{today_str} 收盘定稿）\n\n> [!note] Dashboard 研究摘要\n"
 
