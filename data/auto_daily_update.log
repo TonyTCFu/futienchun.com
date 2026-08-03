@@ -438,3 +438,92 @@ SDK NOTICE Tue Jul 14 13:48:34.823 2026 solClientSmf.c:7791                  (16
 [2026-08-03 20:49:45] 成功: scripts/sync_all_metrics.py 执行完毕。
 [2026-08-03 20:49:45] 输出片段: Updated run_local_qa_checks.py | Updated validate_research_brief_sync.py | Obsidian note sync is disabled. Skipping Obsidian update.
 [2026-08-03 20:49:45] 开始执行 (第 1/3 次尝试): /Users/tonyfu/Documents/台股量化Antigravity/.venv/bin/python /Users/tonyfu/Documents/台股量化Antigravity/scripts/publish_dashboard.py
+[2026-08-03 20:52:11] === 启动每日自动化更新 ===
+[2026-08-03 20:52:11] 正在从 origin 远端拉取最新代码...
+[2026-08-03 20:52:14] git pull origin main 成功，代码已同步为最新。
+[2026-08-03 20:52:14] 开始执行 (第 1/3 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/shioaji_sync_recent.py
+[2026-08-03 20:52:14] 警告: scripts/shioaji_sync_recent.py 执行失败 (尝试 1/3)，退出码 1
+[2026-08-03 20:52:14] 标准错误:
+Traceback (most recent call last):
+  File "/Users/tonyfu/tw_quant_runner/scripts/shioaji_sync_recent.py", line 15, in <module>
+    import numpy as np
+ModuleNotFoundError: No module named 'numpy'
+
+[2026-08-03 20:52:14] 将在 30 秒后重试...
+[2026-08-03 20:52:44] 开始执行 (第 2/3 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/shioaji_sync_recent.py
+[2026-08-03 20:52:44] 警告: scripts/shioaji_sync_recent.py 执行失败 (尝试 2/3)，退出码 1
+[2026-08-03 20:52:44] 标准错误:
+Traceback (most recent call last):
+  File "/Users/tonyfu/tw_quant_runner/scripts/shioaji_sync_recent.py", line 15, in <module>
+    import numpy as np
+ModuleNotFoundError: No module named 'numpy'
+
+[2026-08-03 20:52:44] 将在 30 秒后重试...
+[2026-08-03 20:52:56] === 启动每日自动化更新 ===
+[2026-08-03 20:52:56] 正在从 origin 远端拉取最新代码...
+[2026-08-03 20:53:00] git pull origin main 成功，代码已同步为最新。
+[2026-08-03 20:53:00] 开始执行 (第 1/3 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/shioaji_sync_recent.py
+[2026-08-03 20:53:00] 警告: scripts/shioaji_sync_recent.py 执行失败 (尝试 1/3)，退出码 1
+[2026-08-03 20:53:00] 标准错误:
+Traceback (most recent call last):
+  File "/Users/tonyfu/tw_quant_runner/scripts/shioaji_sync_recent.py", line 15, in <module>
+    import numpy as np
+ModuleNotFoundError: No module named 'numpy'
+
+[2026-08-03 20:53:00] 将在 30 秒后重试...
+[2026-08-03 20:53:30] 开始执行 (第 2/3 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/shioaji_sync_recent.py
+[2026-08-03 20:53:30] 警告: scripts/shioaji_sync_recent.py 执行失败 (尝试 2/3)，退出码 1
+[2026-08-03 20:53:30] 标准错误:
+Traceback (most recent call last):
+  File "/Users/tonyfu/tw_quant_runner/scripts/shioaji_sync_recent.py", line 15, in <module>
+    import numpy as np
+ModuleNotFoundError: No module named 'numpy'
+
+[2026-08-03 20:53:30] 将在 30 秒后重试...
+[2026-08-03 20:54:01] 开始执行 (第 3/3 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/shioaji_sync_recent.py
+[2026-08-03 20:54:01] 警告: scripts/shioaji_sync_recent.py 执行失败 (尝试 3/3)，退出码 1
+[2026-08-03 20:54:01] 标准错误:
+Traceback (most recent call last):
+  File "/Users/tonyfu/tw_quant_runner/scripts/shioaji_sync_recent.py", line 15, in <module>
+    import numpy as np
+ModuleNotFoundError: No module named 'numpy'
+
+[2026-08-03 20:54:30] === 启动每日自动化更新 ===
+[2026-08-03 20:54:30] 正在从 origin 远端拉取最新代码...
+[2026-08-03 20:54:35] git pull origin main 成功，代码已同步为最新。
+[2026-08-03 20:54:35] 开始执行 (第 1/3 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/shioaji_sync_recent.py
+[2026-08-03 20:54:38] 警告: scripts/shioaji_sync_recent.py 执行失败 (尝试 1/3)，退出码 1
+[2026-08-03 20:54:38] 标准输出:
+=== Shioaji 行情同步补全启动 ===
+股票池加载成功，共 20 档标的: 0050, 0056, 00878, 006208, 00713, 00881, 00919, 2330, 2317, 2454, 2303, 2881, 2882, 2412, 2382, 2049, 3491, 2313, 2308, 6285
+错误: 找不到 shioaji 包，请使用虚拟环境安装: No module named 'shioaji'
+
+[2026-08-03 20:54:38] 将在 30 秒后重试...
+[2026-08-03 20:55:08] 开始执行 (第 2/3 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/shioaji_sync_recent.py
+[2026-08-03 20:55:08] 警告: scripts/shioaji_sync_recent.py 执行失败 (尝试 2/3)，退出码 1
+[2026-08-03 20:55:08] 标准输出:
+=== Shioaji 行情同步补全启动 ===
+股票池加载成功，共 20 档标的: 0050, 0056, 00878, 006208, 00713, 00881, 00919, 2330, 2317, 2454, 2303, 2881, 2882, 2412, 2382, 2049, 3491, 2313, 2308, 6285
+错误: 找不到 shioaji 包，请使用虚拟环境安装: No module named 'shioaji'
+
+[2026-08-03 20:55:08] 将在 30 秒后重试...
+[2026-08-03 20:55:38] 开始执行 (第 3/3 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/shioaji_sync_recent.py
+[2026-08-03 20:55:38] 警告: scripts/shioaji_sync_recent.py 执行失败 (尝试 3/3)，退出码 1
+[2026-08-03 20:55:38] 标准输出:
+=== Shioaji 行情同步补全启动 ===
+股票池加载成功，共 20 档标的: 0050, 0056, 00878, 006208, 00713, 00881, 00919, 2330, 2317, 2454, 2303, 2881, 2882, 2412, 2382, 2049, 3491, 2313, 2308, 6285
+错误: 找不到 shioaji 包，请使用虚拟环境安装: No module named 'shioaji'
+
+[2026-08-03 20:57:57] === 启动每日自动化更新 ===
+[2026-08-03 20:57:57] 正在从 origin 远端拉取最新代码...
+[2026-08-03 20:58:04] git pull origin main 成功，代码已同步为最新。
+[2026-08-03 20:58:04] 开始执行 (第 1/3 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/shioaji_sync_recent.py
+[2026-08-03 20:58:47] 成功: scripts/shioaji_sync_recent.py 执行完毕。
+[2026-08-03 20:58:47] 输出片段: 已成功更新缓存 6285_202608.json，当前共有 1 天数据。 |  | === 同步完成: 成功 20/20 档标的 ===
+[2026-08-03 20:58:47] 开始执行重建命令: /Users/tonyfu/tw_quant_runner/.venv/bin/python src/risk_dashboard.py --start 2024-01 --end 2026-08 --offline-cache --model-portfolio --model-method multi-factor-shrink --ai-tilt moderate --market-source public-close --market-mode close --execute-simulated-trades
+[2026-08-03 20:58:47] 重建尝试 (第 1/2 次)...
+[2026-08-03 21:00:02] 成功: risk_dashboard.py 重建完毕。
+[2026-08-03 21:00:02] 开始执行 (第 1/1 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/sync_all_metrics.py
+[2026-08-03 21:00:02] 成功: scripts/sync_all_metrics.py 执行完毕。
+[2026-08-03 21:00:02] 输出片段: Updated run_local_qa_checks.py | Updated validate_research_brief_sync.py | Obsidian note sync is disabled. Skipping Obsidian update.
+[2026-08-03 21:00:02] 开始执行 (第 1/3 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/publish_dashboard.py
