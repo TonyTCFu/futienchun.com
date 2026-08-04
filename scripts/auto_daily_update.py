@@ -61,7 +61,8 @@ def main():
     log("=== 启动每日自动化更新 ===")
     
     # 0. 先从 GitHub 远端拉取最新代码，保障 Documents 工作区与 runner 空间的双向同步
-    log("正在从 origin 远端拉取最新代码...")
+    log("正在重置工作区并从 origin 远端拉取最新代码...")
+    subprocess.run(["git", "checkout", "."], cwd=ROOT, capture_output=True, text=True)
     res_pull = subprocess.run(["git", "pull", "origin", "main"], cwd=ROOT, capture_output=True, text=True)
     if res_pull.returncode != 0:
         log(f"警告: git pull origin main 失败，退出码 {res_pull.returncode}，可能存在本地冲突或网络波动。")
