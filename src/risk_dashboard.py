@@ -3628,8 +3628,8 @@ def render_dashboard(
                         name = asset_name.get(sym, '')
                         act = (row.get("action") or "").strip().upper()
                         shs_str = (row.get("shares") or "").strip()
-                        prc_str = (row.get("price") or "").strip()
-                        amt_str = (row.get("amount") or "").strip()
+                        prc_str = (row.get("trade_price") or row.get("price") or "").strip()
+                        amt_str = (row.get("gross_amount") or row.get("net_amount") or row.get("amount") or "").strip()
                         t_date = (row.get("trade_date") or "").strip()
                         
                         act_lbl = "買入" if act == "BUY" else "賣出"
@@ -3727,7 +3727,7 @@ def render_dashboard(
             <h3>Obsidian 報告文字摘要</h3>
           </div>
           <div class="analysis-note" style="margin-top: 8px; font-size: 11px;">
-            以下純文本框已寫入本地 markdown，您可以一键複製並粘貼到您的 Obsidian 工作流或日誌中。
+            以下文字摘要及相關量化數據表格已由系統自動同步至您的 Obsidian 筆記知識庫（台股量化基金.md）。此處框體僅提供唯讀預覽與歷史備份。
           </div>
           <textarea class="research-report" readonly rows="8" style="width:100%; font-size:11px; background:#070908; border-color:var(--line); padding:10px; margin-top:8px; border-radius:4px; color:var(--ink);">{html.escape(research_report_text)}</textarea>
         </div>
