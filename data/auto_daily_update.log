@@ -259,3 +259,47 @@ fatal: unable to access 'https://github.com/TonyTCFu/futienchun.com.git/': Faile
 [2026-08-06 05:44:49] 成功: scripts/sync_all_metrics.py 执行完毕。
 [2026-08-06 05:44:49] 输出片段: Updated run_local_qa_checks.py | Updated validate_research_brief_sync.py | Warning: Obsidian note /Users/tonyfu/Library/Mobile Documents/iCloud~md~obsidian/Documents/AI-Knowledge-Wiki/02-The-Wiki/05-商业金融与量化交易/01-量化交易/台股量化基金.md not found. Skipping Obsidian update.
 [2026-08-06 05:44:49] 开始执行 (第 1/3 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/publish_dashboard.py
+[2026-08-06 08:32:47] 警告: git pull origin main 失败，退出码 1，可能存在本地冲突或网络波动。
+[2026-08-06 08:32:47] 标准错误:
+fatal: unable to access 'https://github.com/TonyTCFu/futienchun.com.git/': Could not resolve host: github.com
+
+[2026-08-06 08:32:47] 开始执行 (第 1/3 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/shioaji_sync_recent.py
+[2026-08-06 08:33:43] 警告: scripts/shioaji_sync_recent.py 执行失败 (尝试 1/3)，退出码 1
+[2026-08-06 08:33:43] 标准输出:
+=== Shioaji 行情同步补全启动 ===
+股票池加载成功，共 20 档标的: 0050, 0056, 00878, 006208, 00713, 00881, 00919, 2330, 2317, 2454, 2303, 2881, 2882, 2412, 2382, 2049, 3491, 2313, 2308, 6285
+正在登录永丰金 Shioaji API...
+错误: 登录 Shioaji 失败: login: connection error
+
+[2026-08-06 08:33:43] 标准错误:
+SDK NOTICE Thu Aug 06 08:33:19.816 2026 solClientOS.c:5988                   (17058f000) TCP: Could not read from socket 21, error = Connection reset by peer (54)
+SDK NOTICE Thu Aug 06 08:33:19.816 2026 solClientSmf.c:7791                  (17058f000) Read failed from transport 'compression' of session '(c0,s1)_sinopac' due to 'TCP: Could not read from socket 21, error = Connection reset by peer (54)', client name 'PYAPI/H121527648/0805/054513/376284000/103.127.219.21', VPN name 'sinopac', peer host '203.66.91.161:80' address 'IP 203.66.91.161', connection 'tcp_TxRx' local address 'IP 172.16.0.2:51960'
+SDK NOTICE Thu Aug 06 08:33:23.541 2026 solClientOS.c:5988                   (17058f000) TCP: Could not read from socket 21, error = Connection reset by peer (54)
+SDK NOTICE Thu Aug 06 08:33:23.541 2026 solClientSmf.c:7791                  (17058f000) Read failed from transport 'compression' of session '(c0,s1)_sinopac' due to 'TCP: Could not read from socket 21, error = Connection reset by peer (54)', client name 'PYAPI/H121527648/0805/054513/376284000/103.127.219.21', VPN name 'sinopac', peer host '203.66.91.161:80' address 'IP 203.66.91.161', connection 'tcp_TxRx' local address 'IP 172.16.0.2:52014'
+
+[2026-08-06 08:33:43] 将在 30 秒后重试...
+[2026-08-06 08:34:13] 开始执行 (第 2/3 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/shioaji_sync_recent.py
+[2026-08-06 08:34:58] 警告: scripts/shioaji_sync_recent.py 执行失败 (尝试 2/3)，退出码 1
+[2026-08-06 08:34:58] 标准输出:
+=== Shioaji 行情同步补全启动 ===
+股票池加载成功，共 20 档标的: 0050, 0056, 00878, 006208, 00713, 00881, 00919, 2330, 2317, 2454, 2303, 2881, 2882, 2412, 2382, 2049, 3491, 2313, 2308, 6285
+正在登录永丰金 Shioaji API...
+错误: 登录 Shioaji 失败: login: connection error
+
+[2026-08-06 08:34:58] 标准错误:
+SDK NOTICE Thu Aug 06 08:34:46.011 2026 solClientOS.c:5988                   (16c657000) TCP: Could not read from socket 21, error = Connection reset by peer (54)
+SDK NOTICE Thu Aug 06 08:34:46.011 2026 solClientSmf.c:7791                  (16c657000) Read failed from transport 'compression' of session '(c0,s1)_sinopac' due to 'TCP: Could not read from socket 21, error = Connection reset by peer (54)', client name 'PYAPI/H121527648/0805/054513/376284000/103.127.219.21', VPN name 'sinopac', peer host '203.66.91.161:80' address 'IP 203.66.91.161', connection 'tcp_TxRx' local address 'IP 172.16.0.2:52787'
+SDK NOTICE Thu Aug 06 08:34:49.398 2026 solClientOS.c:5988                   (16c657000) TCP: Could not read from socket 21, error = Connection reset by peer (54)
+SDK NOTICE Thu Aug 06 08:34:49.398 2026 solClientSmf.c:7791                  (16c657000) Read failed from transport 'compression' of session '(c0,s1)_sinopac' due to 'TCP: Could not read from socket 21, error = Connection reset by peer (54)', client name 'PYAPI/H121527648/0805/054513/376284000/103.127.219.21', VPN name 'sinopac', peer host '203.66.91.161:80' address 'IP 203.66.91.161', connection 'tcp_TxRx' local address 'IP 172.16.0.2:52819'
+
+[2026-08-06 08:34:58] 将在 30 秒后重试...
+[2026-08-06 08:35:28] 开始执行 (第 3/3 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/shioaji_sync_recent.py
+[2026-08-06 08:35:35] 成功: scripts/shioaji_sync_recent.py 执行完毕。
+[2026-08-06 08:35:35] 输出片段: 已成功更新缓存 6285_202608.json，当前共有 3 天数据。 |  | === 同步完成: 成功 20/20 档标的 ===
+[2026-08-06 08:35:35] 开始执行重建命令: /Users/tonyfu/tw_quant_runner/.venv/bin/python src/risk_dashboard.py --start 2024-01 --end 2026-08 --offline-cache --model-portfolio --model-method multi-factor-shrink --ai-tilt moderate --market-source public-close --market-mode close --execute-simulated-trades
+[2026-08-06 08:35:35] 重建尝试 (第 1/2 次)...
+[2026-08-06 08:35:42] 成功: risk_dashboard.py 重建完毕。
+[2026-08-06 08:35:42] 开始执行 (第 1/1 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/sync_all_metrics.py
+[2026-08-06 08:35:42] 成功: scripts/sync_all_metrics.py 执行完毕。
+[2026-08-06 08:35:42] 输出片段: Updated run_local_qa_checks.py | Updated validate_research_brief_sync.py | Warning: Obsidian note /Users/tonyfu/Library/Mobile Documents/iCloud~md~obsidian/Documents/AI-Knowledge-Wiki/02-The-Wiki/05-商业金融与量化交易/01-量化交易/台股量化基金.md not found. Skipping Obsidian update.
+[2026-08-06 08:35:42] 开始执行 (第 1/3 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/publish_dashboard.py
