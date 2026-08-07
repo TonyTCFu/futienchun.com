@@ -799,3 +799,14 @@ SDK NOTICE Thu Aug 06 13:55:02.921 2026 solClient.c:10240                    (16
 [2026-08-08 02:51:47] 成功: scripts/sync_all_metrics.py 执行完毕。
 [2026-08-08 02:51:47] 输出片段: Updated run_local_qa_checks.py | Updated validate_research_brief_sync.py | Warning: Obsidian note /Users/tonyfu/Library/Mobile Documents/iCloud~md~obsidian/Documents/AI-Knowledge-Wiki/02-The-Wiki/05-商业金融与量化交易/01-量化交易/台股量化基金.md not found. Skipping Obsidian update.
 [2026-08-08 02:51:47] 开始执行 (第 1/3 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/publish_dashboard.py
+[2026-08-08 03:21:58] git pull origin main 成功，代码已同步为最新。
+[2026-08-08 03:21:58] 开始执行 (第 1/3 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/shioaji_sync_recent.py
+[2026-08-08 03:22:06] 成功: scripts/shioaji_sync_recent.py 执行完毕。
+[2026-08-08 03:22:06] 输出片段: 已成功更新缓存 6285_202608.json，当前共有 5 天数据。 |  | === 同步完成: 成功 20/20 档标的 ===
+[2026-08-08 03:22:06] 开始执行重建命令: /Users/tonyfu/tw_quant_runner/.venv/bin/python src/risk_dashboard.py --start 2024-01 --end 2026-08 --offline-cache --model-portfolio --model-method multi-factor-shrink --ai-tilt moderate --market-source public-close --market-mode close --execute-simulated-trades
+[2026-08-08 03:22:06] 重建尝试 (第 1/2 次)...
+[2026-08-08 03:22:13] 成功: risk_dashboard.py 重建完毕。
+[2026-08-08 03:22:13] 开始执行 (第 1/1 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/sync_all_metrics.py
+[2026-08-08 03:22:13] 成功: scripts/sync_all_metrics.py 执行完毕。
+[2026-08-08 03:22:13] 输出片段: Updated run_local_qa_checks.py | Updated validate_research_brief_sync.py | Warning: Obsidian note /Users/tonyfu/Library/Mobile Documents/iCloud~md~obsidian/Documents/AI-Knowledge-Wiki/02-The-Wiki/05-商业金融与量化交易/01-量化交易/台股量化基金.md not found. Skipping Obsidian update.
+[2026-08-08 03:22:13] 开始执行 (第 1/3 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/publish_dashboard.py
