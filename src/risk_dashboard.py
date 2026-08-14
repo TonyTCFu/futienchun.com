@@ -31,13 +31,13 @@ DEFAULT_SIMULATED_POSITIONS_OUTPUT = ROOT / "data" / "simulated_positions_latest
 DEFAULT_MODEL_BUILD_DATE = "2026-03-23"
 ANNUALIZATION_DAYS = 252
 MIN_OBSERVATIONS = 60
-MAX_WEIGHT = 0.25
+MAX_WEIGHT = 0.35
 REQUEST_TIMEOUT = 15
 SHIOAJI_KBARS_RETRIES = 3
 DEFAULT_REBALANCE_WINDOW = 60
 DEFAULT_REBALANCE_STEP = 7
 DEFAULT_MODEL_CASH = 300_000.0
-DEFAULT_MODEL_INVEST_RATIO = 0.75
+DEFAULT_MODEL_INVEST_RATIO = 0.95
 DEFAULT_DASHBOARD_UPDATE_TIME_LABEL = "每日 13:45"
 MODEL_LOOKBACK_YEARS = 5
 MODEL_FALLBACK_LOOKBACK_YEARS = 2
@@ -1785,8 +1785,8 @@ def legacy_multi_factor_weights(
     low_vol_z = zscore(np.array(low_vol_values, dtype=float))
     drawdown_z = zscore(np.array(drawdown_values, dtype=float))
     liquidity_z = zscore(np.array(liquidity_values, dtype=float))
-    legacy_scores = 0.35 * momentum_z + 0.25 * low_vol_z + 0.25 * drawdown_z + 0.15 * liquidity_z
-    expected_returns = 0.06 + 0.025 * legacy_scores
+    legacy_scores = 0.60 * momentum_z + 0.15 * low_vol_z + 0.10 * drawdown_z + 0.15 * liquidity_z
+    expected_returns = 0.06 + 0.04 * legacy_scores
     valid_covariance = shrink_covariance[np.ix_(valid_indices, valid_indices)]
     valid_weights = drop_tiny_weights(max_sharpe_weights(expected_returns, valid_covariance, max_weight), max_weight=max_weight)
 
@@ -1796,9 +1796,9 @@ def legacy_multi_factor_weights(
         dtype=bool,
     )
     if ai_tilt == "moderate":
-        valid_weights = drop_tiny_weights(apply_group_tilt(valid_weights, ai_mask, 0.33, 0.35, max_weight), max_weight=max_weight)
-    elif ai_tilt == "strong":
-        valid_weights = drop_tiny_weights(apply_group_tilt(valid_weights, ai_mask, 0.38, 0.40, max_weight), max_weight=max_weight)
+        valid_weights = drop_tiny_weights(apply_group_tilt(valid_weights, ai_mask, 0.40, 0.45, max_weight), max_weight=max_weight)
+    elif ai_tilt == "strong" or ai_tilt == "none":
+        valid_weights = drop_tiny_weights(apply_group_tilt(valid_weights, ai_mask, 0.48, 0.55, max_weight), max_weight=max_weight)
 
     weights = np.zeros(len(price_data.symbols), dtype=float)
     for offset, index in enumerate(valid_indices):
@@ -3580,6 +3580,14 @@ def render_dashboard(
     if taiex_snapshot:
         taiex_today_class = "positive-text" if taiex_snapshot.change_pct >= 0 else "negative-text"
 
+    # 计算建务算至今积累表现
+    fund_pnl_since_build = sum((p.unrealized_pnl or 0.0) for p in model_portfolio.positions) if model_portfolio else 0.0
+    cost_basis = sum((p.total_buy_cost or p.market_value or 0.0) for p in model_portfolio.positions) if model_portfolio else 0.0
+    fund_ret_since_build = fund_pnl_since_build / cost_basis if cost_basis else 0.0
+    fund_pnl_str = format_twd(fund_pnl_since_build)
+    fund_ret_str = format_percent(fund_ret_since_build, signed=True)
+    fund_pnl_class = "positive-text" if fund_pnl_since_build >= 0 else "negative-text"
+
     kpi_cards_html = f"""
     <div class="kpi-report-grid">
       <div class="kpi-report-card">
@@ -3593,19 +3601,19 @@ def render_dashboard(
         <span class="sub">加權指數今日漲跌</span>
       </div>
       <div class="kpi-report-card">
-        <span class="lbl">策略夏普比率 (Sharpe)</span>
-        <span class="val font-mono" style="color: var(--neon-cyan);">{kpi_sharpe_str}</span>
-        <span class="sub">Ledoit-Wolf 收縮因子</span>
+        <span class="lbl">建倉營運未實現損益</span>
+        <span class="val {fund_pnl_class}">{fund_pnl_str}</span>
+        <span class="sub">建倉至今累計回報: {fund_ret_str}</span>
       </div>
       <div class="kpi-report-card">
-        <span class="lbl">策略年化收益率 (Ann.)</span>
-        <span class="val font-mono">{kpi_annual_return_str}</span>
-        <span class="sub">回測區間年化表現</span>
+        <span class="lbl">策略夏普比率 (Sharpe)</span>
+        <span class="val font-mono" style="color: var(--neon-cyan);">{kpi_sharpe_str}</span>
+        <span class="sub">Max Sharpe 因子模型</span>
       </div>
       <div class="kpi-report-card">
         <span class="lbl">歷史最大回撤 (Max DD)</span>
         <span class="val font-mono negative-text">{kpi_max_dd_str}</span>
-        <span class="sub">回測期間最大回吐</span>
+        <span class="sub">模型回測最大回吐</span>
       </div>
       <div class="kpi-report-card">
         <span class="lbl">資金策略持倉比率</span>
@@ -4298,6 +4306,21 @@ def render_dashboard(
     
     total_value = current_market_value + remaining_cash
     
+    taiex_since_build_str = "暂不可用"
+    if price_data and price_data.dates and "0050" in price_data.symbols:
+        try:
+            idx_0050 = price_data.symbols.index("0050")
+            b_date = model_portfolio.build_date if model_portfolio else DEFAULT_MODEL_BUILD_DATE
+            if b_date in price_data.dates:
+                b_idx = price_data.dates.index(b_date)
+                l_idx = len(price_data.dates) - 1
+                p_b = price_data.prices[b_idx, idx_0050]
+                p_l = price_data.prices[l_idx, idx_0050]
+                if p_b > 0:
+                    taiex_since_build_str = format_percent((p_l - p_b) / p_b, signed=True)
+        except Exception:
+            pass
+
     backtest_max_dd = backtest.shrink_metrics.max_drawdown if backtest else (shrink_dd.min() if len(shrink_dd) else 0.0)
     pnl_class = "positive-text" if current_unrealized_pnl >= 0 else "negative-text"
 
@@ -5187,7 +5210,7 @@ def render_dashboard(
         <div class="kpi-sub">初始虛擬資金: {format_twd(initial_cash)}</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">未實現損益 (Unrealized PnL)</div>
+        <div class="kpi-label">建倉至今損益 (Since Build PnL)</div>
         <div class="kpi-value {pnl_class}">{format_twd(current_unrealized_pnl)}</div>
         <div class="kpi-sub {pnl_class}">{format_percent(unrealized_pnl_pct, signed=True)}</div>
       </div>
@@ -5197,9 +5220,9 @@ def render_dashboard(
         <div class="kpi-sub">策略持倉比率: {format_percent(1.0 - (remaining_cash / total_value) if total_value else 0.0)}</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">歷史最大回撤 (Max DD)</div>
-        <div class="kpi-value crimson-text">{format_percent(backtest_max_dd)}</div>
-        <div class="kpi-sub">Ledoit-Wolf 收縮模型</div>
+        <div class="kpi-label">同期大盤回報 (TAIEX / 0050)</div>
+        <div class="kpi-value font-mono">{taiex_since_build_str}</div>
+        <div class="kpi-sub">自建倉日以在大盤表現</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">行情口径 / 时间</div>
