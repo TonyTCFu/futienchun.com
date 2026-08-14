@@ -1959,18 +1959,18 @@ def build_trade_signals(
         persistence_days = max(buy_persistence, sell_persistence)
 
         if shares > 0 and entry_return is not None:
-            if market_loss_persistence >= 2:
+            if market_loss_persistence >= 1 or entry_return <= -0.04:
                 action = "建议卖出"
                 status = "sell"
                 trigger_code = "market_loss_stop_25"
-                proposed_shares = max(1, math.ceil(shares * 0.25))
-                reason = "模拟盘连续收盘亏损超过约 6%，已连续观察至少 2 天，建议先减码 25%。"
-            elif (entry_return <= -0.06 or (trend_negative and entry_return < -0.03)) and sell_persistence >= 2:
+                proposed_shares = shares
+                reason = "模拟盘持仓亏损超过 4% 或趋势破位，触发全额止损出局，资金轮换至强势 Alpha 龙头。"
+            elif (entry_return <= -0.04 or (trend_negative and entry_return < -0.02)) and sell_persistence >= 1:
                 action = "建议卖出"
                 status = "sell"
                 trigger_code = "cost_or_trend_stop_25"
-                proposed_shares = max(1, math.ceil(shares * 0.25))
-                reason = "价格跌破建仓成本约 6%，或跌破 60 日趋势且持仓转弱，并已连续观察至少 2 天，建议先减码 25%。"
+                proposed_shares = shares
+                reason = "价格跌破 20 日/60 日趋势且持仓转弱，触发全额清仓止损，资金轮换至强势 Alpha 龙头。"
             elif entry_return >= 0.08 and is_overheated and sell_persistence >= 2:
                 action = "建议卖出"
                 status = "sell"
@@ -3383,7 +3383,8 @@ def render_dashboard(
     update_actions = [
         f"已刷新公开收盘价路径，Dashboard 行情/回测序列最新日期为 {dashboard_data_end}。",
         f"已套用本地模型盘市值档 {portfolio_market_date}（{market_mode_text}），当前持仓市值 {format_twd(current_market_value)}，未实现盈亏 {format_twd(current_unrealized_pnl)}。",
-        f"已复核策略监控：待确认调仓 {len(actionable_signals)} 笔，已落账模拟成交 {execution_trade_count} 笔，红色卖出建议不会重复显示已落账标的。",
+        f"已复核策略监控：待确认调仓 {len(actionable_signals)} 笔，已落账模拟成交 {execution_trade_count} 笔。",
+        "严格时序防穿越定界：盘后仅生成【待次日开盘执行】建议单，绝不回溯历史成交价；撮合落账必须且只能在下一个开盘日（Open Price）或盘中真实成交价产生后执行。",
     ]
     next_steps = [
         "下一交易日继续用公开收盘价刷新 Dashboard，并把公网首页正文作为发布完成标准。",
