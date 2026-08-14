@@ -1,0 +1,2 @@
+﻿trade_id,trade_date,symbol,name,action,shares,trade_price,gross_amount,fee,tax,net_amount,realized_cost,realized_pnl,remaining_shares,reason,status
+paper-20260814-2412-sell-01-73f0c3e972,2026-08-14,2412,中華電,sell,92,135.0000,12420.00,18.00,37.00,12365.00,13174.73,-809.73,0,模拟盘持仓亏损超过 4% 或趋势破位，触发全额止损出局，资金轮换至强势 Alpha 龙头。,executed
