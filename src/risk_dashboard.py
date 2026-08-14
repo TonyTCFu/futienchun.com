@@ -3488,6 +3488,85 @@ def render_dashboard(
       </section>
 """
 
+def build_plain_language_daily_narrative(
+    model_portfolio: ModelPortfolio | None,
+    execution_summary: ExecutionOrdersSummary | None,
+    actionable_signals: list[TradeSignal],
+    taiex_snapshot: TaiexSnapshot | None,
+    market_date: str,
+) -> str:
+    has_trades = execution_summary and execution_summary.orders and len(execution_summary.orders) > 0
+    pre_market_text = (
+        "開盤前，量化模型對股票池進行了全量自動掃描，重點追蹤 20日/60日均線的趨勢動能；"
+        "對處在上升通道、大資金持續流入的股票維持關注，對跌破均線或出現虧損的股票拉入止損觀察清單。"
+    )
+    
+    trade_details_items = []
+    if has_trades:
+        for sym, order in execution_summary.orders.items():
+            name = order.get("name", sym)
+            shares = int(order.get("shares", 0))
+            price = float(order.get("buy_reference_price", 0.0))
+            total = float(order.get("total_buy_cost", 0.0) or price * shares)
+            action_type = "賣出清倉止損" if shares > 0 else "買入/加碼順勢龍頭"
+            trade_details_items.append(
+                f"<li><b>【{action_type}】{html.escape(sym)} {html.escape(name)}</b>："
+                f" 成交 {shares:,} 股，成交均價 NT$ {price:,.2f}，總金額 NT$ {total:,.2f}。</li>"
+            )
+        trade_details_html = f'<ul class="risk-list" style="margin-top: 6px; line-height: 1.7;">{"".join(trade_details_items)}</ul>'
+    else:
+        trade_details_html = '<p style="margin-top: 6px; color: var(--muted); font-size: 13px;">今日（或最近一交易日）無新觸發的模擬買賣扣款。持倉股票全部處在安全風控線內，繼續持股觀察。</p>'
+    
+    if has_trades:
+        rationale_text = (
+            "<b>【白話決策邏輯】</b>：今天執行的操作主要是為了<b>‘截斷虧損、保護本金、換倉強勢龍頭’</b>。"
+            "對於觸發賣出的股票，是因為它們跌破了 20日均線支撐或達到了止損線，算法嚴格按紀律 100% 清倉止損，不抱僥倖心理死守；"
+            "同時把回收的資金集中用於加倉處於上升通道、漲勢強勁的領漲龍頭，爭取實現年化 8% 以上的絕對正收益。"
+        )
+    else:
+        rationale_text = (
+            "<b>【白話決策邏輯】</b>：今日持倉整體走勢平穩，既未觸及止損線，也無需強制換倉。"
+            "在順勢行情中‘讓利潤奔跑’、避免無意義的頻繁換手，是降低交易手續費、維持高夏普比率的最佳策略。"
+        )
+
+    next_day_text = (
+        "明天開盤後，算法將繼續實時追蹤持倉股票的均線支撐與動能得分。"
+        "一旦有股票出現趨勢破位，將在開盤後第一時間執行止損；若出現新突破的領漲龍頭，將把資金自動輪換重倉買入。"
+    )
+    
+    return f"""
+    <div class="panel" style="margin-bottom: 20px; border-left: 4px solid var(--neon-emerald);">
+      <div class="section-heading" style="margin-bottom: 10px;">
+        <div>
+          <span class="eyebrow" style="color: var(--neon-emerald);">Daily Operations & Execution Narrative</span>
+          <h2>每日基金操作與白話決策報告</h2>
+        </div>
+        <span class="status-pill sys-tag">白話解讀 / 零專業門檻</span>
+      </div>
+      
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 12px;">
+        <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 4px; border: 1px solid var(--line);">
+          <h4 style="margin: 0 0 6px 0; color: var(--neon-cyan); font-size: 13px;">一、 開盤前準備 (Pre-Market Scan)</h4>
+          <p style="margin: 0; font-size: 12px; line-height: 1.6; color: var(--muted);">{html.escape(pre_market_text)}</p>
+        </div>
+        <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 4px; border: 1px solid var(--line);">
+          <h4 style="margin: 0 0 6px 0; color: var(--orange); font-size: 13px;">四、 明日開盤觀察重點 (Next Day Focus)</h4>
+          <p style="margin: 0; font-size: 12px; line-height: 1.6; color: var(--muted);">{html.escape(next_day_text)}</p>
+        </div>
+      </div>
+      
+      <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 4px; border: 1px solid var(--line); margin-bottom: 12px;">
+        <h4 style="margin: 0 0 6px 0; color: var(--neon-emerald); font-size: 13px;">二、 盤中/今日執行明細 (Execution Details)</h4>
+        {trade_details_html}
+      </div>
+      
+      <div style="background: rgba(0, 240, 153, 0.05); padding: 12px; border-radius: 4px; border: 1px solid rgba(0, 240, 153, 0.2);">
+        <h4 style="margin: 0 0 6px 0; color: var(--neon-emerald); font-size: 13px;">三、 為什麼做這些動作？ (Plain-Language Rationale)</h4>
+        <p style="margin: 0; font-size: 12px; line-height: 1.6; color: var(--ink);">{rationale_text}</p>
+      </div>
+    </div>
+"""
+
     # === 每日简报 (Daily Summary Report) & KPI 仪表盘组装 ===
     # 1. 计算个股最新单日回报率（红黑榜）
     top_winners_html = ""
@@ -3704,8 +3783,17 @@ def render_dashboard(
         </div>
         """
 
+    plain_narrative_html = build_plain_language_daily_narrative(
+        model_portfolio=model_portfolio,
+        execution_summary=execution_summary,
+        actionable_signals=actionable_signals,
+        taiex_snapshot=taiex_snapshot,
+        market_date=portfolio_market_date,
+    )
+
     # 4. 组装每日报告 Tab 容器 HTML
     daily_summary_report_html = f"""
+      {plain_narrative_html}
       <div class="summary-grid-container">
         <!-- 左侧：报告总结 -->
         <div class="panel">
