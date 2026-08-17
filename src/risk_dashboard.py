@@ -420,7 +420,8 @@ def matrix_cache_path(assets: Iterable[Asset], months: list[str], cache_dir: Pat
     source_files: list[dict[str, object]] = []
     for asset in asset_list:
         for month in months:
-            path = cache_dir / f"{asset.symbol}_{month}.json"
+            norm_month = month.replace("-", "")
+            path = cache_dir / f"{asset.symbol}_{norm_month}.json"
             if path.exists():
                 stat = path.stat()
                 source_files.append({"name": path.name, "size": stat.st_size, "mtime_ns": stat.st_mtime_ns})
@@ -434,6 +435,7 @@ def matrix_cache_path(assets: Iterable[Asset], months: list[str], cache_dir: Pat
     }
     cache_key = hashlib.sha256(json.dumps(key_payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:16]
     return DEFAULT_MATRIX_CACHE_DIR / f"twse_prices_{cache_key}.npz"
+
 
 
 def load_price_matrix_cache(path: Path) -> tuple[PriceData, list[DataIssue]] | None:
