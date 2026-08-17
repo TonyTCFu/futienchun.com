@@ -51,9 +51,14 @@
   - 针对旧版没有 `trade_id` 的模拟成交记录，采用交易日、标的和方向作为去重依据，在 Dashboard 中统一显示为“舊格式 2 筆”，避免被错误硬判为新批次。
 - **Obsidian 同步变更**:
   - 曾经接入 Obsidian 自动同步，但在 2026-06-26 遵循用户要求，**已完全停用 Obsidian 自动同步与同步验证机制**。
-- **服务器重启与自动挂载方案**:
+- **7x24 小时 GitHub Actions 云端自动化架构 (对标美股体系)**:
+  - 彻底摆脱本地电脑休眠/合盖/断网对更新的影响，正式部署并启用了云端工作流 `.github/workflows/daily_quant_pipeline.yml`。
+  - **触发机制**：每天台湾时间 13:45 (UTC 05:45) 主动执行，14:15 (UTC 06:15) 进行二次校验与补更。
+  - **数据闭环**：基于 `public-close` 官方公开收盘行情完成模型重建与模拟盘落账，执行 QA 绿灯校验后自动推送至 GitHub `main` 分支，由 Cloudflare Pages 秒级发布到公网。
+  - **本地双重冗余**：保留本地 `com.tonyfu.tw_quant_daily_update` LaunchAgent 作为辅助备用（带有成功标记防重）。
+- **服务器重启与本地 LaunchAgent 保底方案**:
   - 遇到系统/服务器重启时，后台配置的 Antigravity 内存级 Schedule 定时任务会被清空。
-  - **终极解决方案**：为了防止重启/关机导致定时器失效，已在 macOS 用户层注册了系统级 LaunchAgent (`com.tonyfu.tw_quant_daily_update.plist`)，配置在每天 `13:45` 自动执行 `scripts/auto_daily_update.py`。即便系统重启或关机，只要开机登录即可由 `launchd` 自动拉起，无需手动激活。
+  - 本地注册的系统级 LaunchAgent (`com.tonyfu.tw_quant_daily_update.plist`) 作为第二道防线，配置在每天 `13:45` 自动执行 `scripts/auto_daily_update.py`。
 - **自动网络重试与标记秒退机制**:
   - 针对网络波动、休眠后唤醒等导致的 API 登录或 Git 推送超时，在 `scripts/auto_daily_update.py` 中引入了自动网络重试（最多重试 3 次，间隔 30 秒）。
   - 为实现断线自动补更，配置了 LaunchAgent 每 30 分钟轮询一次。为避免频繁更新产生的 CPU 占用和冗余 git 推送，设计了成功日期标记文件 `data/.last_success_date`，今日已成功执行时可在 0.1 秒内快速退出。
