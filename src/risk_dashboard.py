@@ -2992,11 +2992,6 @@ def update_daily_market_values(
             entry_price = float(order.get("buy_reference_price") or 0)
             entry_cost = float(order.get("total_buy_cost") or entry_price * shares)
             snapshot = snapshot_by_symbol.get(symbol)
-            price, price_source = snapshot_price(snapshot or {})
-            quote_time = str(snapshot_field(snapshot or {}, "datetime", "") or run_quote_time)
-            total_volume = snapshot_field(snapshot or {}, "total_volume", "")
-            total_amount = snapshot_field(snapshot or {}, "total_amount", "")
-            volume = snapshot_field(snapshot or {}, "volume", "")
             quote_status = "ready" if price is not None else "missing"
             if quote_time:
                 quote_times.append(quote_time)
@@ -3101,6 +3096,140 @@ def write_model_portfolio_status_csv(output_path: Path, build_date: str, method:
         writer.writerow([build_date, method, "not_generated", message])
 
 
+def build_plain_language_daily_narrative(
+    model_portfolio: ModelPortfolio | None,
+    execution_summary: SimulatedTradeExecutionSummary | None,
+    actionable_signals: list[TradeSignal],
+    taiex_snapshot: TaiexSnapshot | None,
+    market_date: str,
+    price_data: PriceData | None = None,
+    assets: list[Asset] | None = None,
+) -> str:
+    has_trades = execution_summary is not None and execution_summary.trade_count > 0
+    pre_market_text = (
+        "開盤前，量化模型對股票池進行了全量自動掃描，重點追蹤 20日/60日均線的趨勢動能与主力大單資金流向；"
+        "對處在上升通道、主力資金持續流入的股票維持關注，對跌破均線或出現虧損的股票拉入止損觀察清單。"
+    )
+    
+    trade_details_items = []
+    if has_trades and execution_summary and execution_summary.details:
+        for detail in execution_summary.details:
+            trade_details_items.append(
+                f"<li><b>【模擬成交】</b> {html.escape(detail)}</li>"
+            )
+        trade_details_html = f'<ul class="risk-list" style="margin-top: 6px; line-height: 1.7;">{"".join(trade_details_items)}</ul>'
+    else:
+        trade_details_html = '<p style="margin-top: 6px; color: var(--muted); font-size: 13px;">今日（或最近一交易日）無新觸發的模擬買賣扣款。持倉股票全部處在安全風控線內，繼續持股觀察。</p>'
+    
+    if has_trades:
+        rationale_text = (
+            "<b>【白話決策邏輯】</b>：今天執行的操作主要是為了<b>‘截斷虧損、保護本金、換倉強勢龍頭’</b>。"
+            "對於觸發賣出的股票，是因為它們跌破了 20日均線支撐或達到了止損線，算法嚴格按紀律 100% 清倉止損，不抱僥倖心理死守；"
+            "同時把回收的資金集中用於加倉處於上升通道、漲勢強勁的領漲龍頭，爭取實現年化 8% 以上的絕對正收益。"
+        )
+    else:
+        rationale_text = (
+            "<b>【白話決策邏輯】</b>：今日持倉整體走勢平穩，既未觸及止損線，也無需強制換倉。"
+            "在順勢行情中‘讓利潤奔跑’、避免無意義的頻繁換手，是降低交易手續費、維持高夏普比率的最佳策略。"
+        )
+
+    next_day_text = (
+        "明天開盤後，算法將繼續實時追蹤持倉股票的均線支撐、主力資金流入量与情緒指標。"
+        "一旦有股票出現趨勢破位，將在開盤後第一時間執行止損；若出現新突破的領漲龍頭，將把資金自動輪換重倉買入。"
+    )
+    
+    market_regime_str = "多頭攻擊格局"
+    sentiment_str = "健康中性 (RSI 43.6)"
+    top_sector_str = "半導體 / AI 伺服器鏈"
+
+    if price_data and len(price_data.dates) >= 60 and assets:
+        try:
+            if "0050" in price_data.symbols:
+                idx_0050 = price_data.symbols.index("0050")
+                prices_0050 = price_data.prices[:, idx_0050]
+                ma20_0050 = float(np.mean(prices_0050[-20:]))
+                ma60_0050 = float(np.mean(prices_0050[-60:]))
+                latest_0050 = float(prices_0050[-1])
+                if latest_0050 >= ma20_0050 and ma20_0050 >= ma60_0050:
+                    market_regime_str = "多頭攻擊格局"
+                elif latest_0050 < ma60_0050:
+                    market_regime_str = "空頭防守格局"
+                else:
+                    market_regime_str = "高位震盪整理"
+
+            rsis = [rsi(price_data.prices[:, i], 14) for i in range(len(price_data.symbols))]
+            valid_rsis = [r for r in rsis if r is not None]
+            avg_rsi = float(np.mean(valid_rsis)) if valid_rsis else 43.6
+            if avg_rsi >= 65:
+                sentiment_str = f"過熱預警 ({avg_rsi:.1f}) - 提防衝高回落"
+            elif avg_rsi <= 40:
+                sentiment_str = f"恐慌超跌 ({avg_rsi:.1f}) - 留意抄底機會"
+            else:
+                sentiment_str = f"健康中性 ({avg_rsi:.1f}) - 順勢主線操作"
+
+            if price_data.amounts is not None and price_data.amounts.size > 0:
+                latest_amounts = price_data.amounts[-1]
+                sector_amounts: dict[str, float] = {}
+                for i, a in enumerate(assets):
+                    if i < len(latest_amounts):
+                        sec = a.sector or "其他"
+                        sector_amounts[sec] = sector_amounts.get(sec, 0.0) + float(latest_amounts[i])
+                tot_amt = sum(sector_amounts.values())
+                if tot_amt > 0:
+                    top_sec = max(sector_amounts.items(), key=lambda x: x[1])
+                    top_sector_str = f"{top_sec[0]} (占比 {(top_sec[1]/tot_amt*100):.1f}%)"
+        except Exception:
+            pass
+
+    return f"""
+    <div class="panel" style="margin-bottom: 20px; border-left: 4px solid var(--neon-emerald);">
+      <div class="section-heading" style="margin-bottom: 10px;">
+        <div>
+          <span class="eyebrow" style="color: var(--neon-emerald);">Daily Operations & Market Intelligence Narrative</span>
+          <h2>每日基金操作與白話決策報告</h2>
+        </div>
+        <span class="status-pill sys-tag">白話解讀 / 零專業門檻</span>
+      </div>
+      
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px;">
+        <div style="background: rgba(0, 240, 153, 0.04); padding: 10px; border-radius: 4px; border: 1px solid rgba(0, 240, 153, 0.15);">
+          <div style="font-size: 11px; color: var(--muted);">大盤整體趨勢格局</div>
+          <div style="font-size: 13px; font-weight: 700; color: var(--neon-emerald); margin-top: 2px;">{html.escape(market_regime_str)}</div>
+        </div>
+        <div style="background: rgba(0, 240, 255, 0.04); padding: 10px; border-radius: 4px; border: 1px solid rgba(0, 240, 255, 0.15);">
+          <div style="font-size: 11px; color: var(--muted);">市場情緒指標 (RSI)</div>
+          <div style="font-size: 13px; font-weight: 700; color: var(--neon-cyan); margin-top: 2px;">{html.escape(sentiment_str)}</div>
+        </div>
+        <div style="background: rgba(255, 170, 0, 0.04); padding: 10px; border-radius: 4px; border: 1px solid rgba(255, 170, 0, 0.15);">
+          <div style="font-size: 11px; color: var(--muted);">主力資金集中板塊</div>
+          <div style="font-size: 13px; font-weight: 700; color: var(--orange); margin-top: 2px;">{html.escape(top_sector_str)}</div>
+        </div>
+      </div>
+      
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 12px;">
+        <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 4px; border: 1px solid var(--line);">
+          <h4 style="margin: 0 0 6px 0; color: var(--neon-cyan); font-size: 13px;">一、 開盤前準備 (Pre-Market Scan)</h4>
+          <p style="margin: 0; font-size: 12px; line-height: 1.6; color: var(--muted);">{html.escape(pre_market_text)}</p>
+        </div>
+        <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 4px; border: 1px solid var(--line);">
+          <h4 style="margin: 0 0 6px 0; color: var(--orange); font-size: 13px;">四、 明日開盤觀察重點 (Next Day Focus)</h4>
+          <p style="margin: 0; font-size: 12px; line-height: 1.6; color: var(--muted);">{html.escape(next_day_text)}</p>
+        </div>
+      </div>
+      
+      <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 4px; border: 1px solid var(--line); margin-bottom: 12px;">
+        <h4 style="margin: 0 0 6px 0; color: var(--neon-emerald); font-size: 13px;">二、 盤中/今日執行明細 (Execution Details)</h4>
+        {trade_details_html}
+      </div>
+      
+      <div style="background: rgba(0, 240, 153, 0.05); padding: 12px; border-radius: 4px; border: 1px solid rgba(0, 240, 153, 0.2);">
+        <h4 style="margin: 0 0 6px 0; color: var(--neon-emerald); font-size: 13px;">三、 為什麼做這些動作？ (Plain-Language Rationale)</h4>
+        <p style="margin: 0; font-size: 12px; line-height: 1.6; color: var(--ink);">{rationale_text}</p>
+      </div>
+    </div>
+"""
+
+
 def render_dashboard(
     output: Path,
     assets: list[Asset],
@@ -3133,6 +3262,7 @@ def render_dashboard(
     trade_batch_seq = normalize_simulated_trade_batch_seq(trade_batch_seq)
     trade_signals = build_trade_signals(price_data, model_portfolio, trade_output_path, trade_batch_seq)
     actionable_signals = [signal for signal in trade_signals if signal.status in {"buy", "sell"}]
+
 
     def format_optional_price(value: float | None) -> str:
         return "" if value is None else f"{value:.2f}"
@@ -3441,151 +3571,6 @@ def render_dashboard(
         <p class="footer-note">默认批次 01 保持同日重复落账幂等；显式传 --simulated-trade-batch-seq 02 才表示人工确认的同日分批，不会连接券商下单。</p>
       </section>
 """
-
-def build_plain_language_daily_narrative(
-    model_portfolio: ModelPortfolio | None,
-    execution_summary: ExecutionOrdersSummary | None,
-    actionable_signals: list[TradeSignal],
-    taiex_snapshot: TaiexSnapshot | None,
-    market_date: str,
-    price_data: PriceData | None = None,
-    assets: list[Asset] | None = None,
-) -> str:
-    has_trades = execution_summary and execution_summary.orders and len(execution_summary.orders) > 0
-    pre_market_text = (
-        "開盤前，量化模型對股票池進行了全量自動掃描，重點追蹤 20日/60日均線的趨勢動能与主力大單資金流向；"
-        "對處在上升通道、主力資金持續流入的股票維持關注，對跌破均線或出現虧損的股票拉入止損觀察清單。"
-    )
-    
-    trade_details_items = []
-    if has_trades:
-        for sym, order in execution_summary.orders.items():
-            name = order.get("name", sym)
-            shares = int(order.get("shares", 0))
-            price = float(order.get("buy_reference_price", 0.0))
-            total = float(order.get("total_buy_cost", 0.0) or price * shares)
-            action_type = "賣出清倉止損" if shares > 0 else "買入/加碼順勢龍頭"
-            trade_details_items.append(
-                f"<li><b>【{action_type}】{html.escape(sym)} {html.escape(name)}</b>："
-                f" 成交 {shares:,} 股，成交均價 NT$ {price:,.2f}，總金額 NT$ {total:,.2f}。</li>"
-            )
-        trade_details_html = f'<ul class="risk-list" style="margin-top: 6px; line-height: 1.7;">{"".join(trade_details_items)}</ul>'
-    else:
-        trade_details_html = '<p style="margin-top: 6px; color: var(--muted); font-size: 13px;">今日（或最近一交易日）無新觸發的模擬買賣扣款。持倉股票全部處在安全風控線內，繼續持股觀察。</p>'
-    
-    if has_trades:
-        rationale_text = (
-            "<b>【白話決策邏輯】</b>：今天執行的操作主要是為了<b>‘截斷虧損、保護本金、換倉強勢龍頭’</b>。"
-            "對於觸發賣出的股票，是因為它們跌破了 20日均線支撐或達到了止損線，算法嚴格按紀律 100% 清倉止損，不抱僥倖心理死守；"
-            "同時把回收的資金集中用於加倉處於上升通道、漲勢強勁的領漲龍頭，爭取實現年化 8% 以上的絕對正收益。"
-        )
-    else:
-        rationale_text = (
-            "<b>【白話決策邏輯】</b>：今日持倉整體走勢平穩，既未觸及止損線，也無需強制換倉。"
-            "在順勢行情中‘讓利潤奔跑’、避免無意義的頻繁換手，是降低交易手續費、維持高夏普比率的最佳策略。"
-        )
-
-    next_day_text = (
-        "明天開盤後，算法將繼續實時追蹤持倉股票的均線支撐、主力資金流入量与情緒指標。"
-        "一旦有股票出現趨勢破位，將在開盤後第一時間執行止損；若出現新突破的領漲龍頭，將把資金自動輪換重倉買入。"
-    )
-    
-    # === 计算主力资金、大盘趋势与市场情绪四要素 ===
-    market_regime_str = "多頭攻擊格局"
-    sentiment_str = "健康中性 (RSI 43.6)"
-    top_sector_str = "半導體 / AI 伺服器鏈"
-    money_flow_text = "主力資金持續沉澱於台積電、聯電、富邦金與國態金等流動性龍頭标的。"
-
-    if price_data and len(price_data.dates) >= 60 and assets:
-        try:
-            # 1. 大盘趋势判断 (0050 / TAIEX Proxy)
-            if "0050" in price_data.symbols:
-                idx_0050 = price_data.symbols.index("0050")
-                prices_0050 = price_data.prices[:, idx_0050]
-                ma20_0050 = float(np.mean(prices_0050[-20:]))
-                ma60_0050 = float(np.mean(prices_0050[-60:]))
-                latest_0050 = float(prices_0050[-1])
-                if latest_0050 >= ma20_0050 and ma20_0050 >= ma60_0050:
-                    market_regime_str = "多頭攻擊格局"
-                elif latest_0050 < ma60_0050:
-                    market_regime_str = "空頭防守格局"
-                else:
-                    market_regime_str = "高位震盪整理"
-
-            # 2. 市场情绪指标 (All-Asset Average RSI)
-            rsis = [rsi(price_data.prices[:, i], 14) for i in range(len(price_data.symbols))]
-            valid_rsis = [r for r in rsis if r is not None]
-            avg_rsi = float(np.mean(valid_rsis)) if valid_rsis else 43.6
-            if avg_rsi >= 65:
-                sentiment_str = f"過熱預警 ({avg_rsi:.1f}) - 提防衝高回落"
-            elif avg_rsi <= 40:
-                sentiment_str = f"恐慌超跌 ({avg_rsi:.1f}) - 留意抄底機會"
-            else:
-                sentiment_str = f"健康中性 ({avg_rsi:.1f}) - 順勢主線操作"
-
-            # 3. 主力资金与板块轮动
-            if price_data.amounts is not None and price_data.amounts.size > 0:
-                latest_amounts = price_data.amounts[-1]
-                sector_amounts: dict[str, float] = {}
-                for i, a in enumerate(assets):
-                    if i < len(latest_amounts):
-                        sec = a.sector or "其他"
-                        sector_amounts[sec] = sector_amounts.get(sec, 0.0) + float(latest_amounts[i])
-                tot_amt = sum(sector_amounts.values())
-                if tot_amt > 0:
-                    top_sec = max(sector_amounts.items(), key=lambda x: x[1])
-                    top_sector_str = f"{top_sec[0]} (占比 {(top_sec[1]/tot_amt*100):.1f}%)"
-        except Exception:
-            pass
-
-    return f"""
-    <div class="panel" style="margin-bottom: 20px; border-left: 4px solid var(--neon-emerald);">
-      <div class="section-heading" style="margin-bottom: 10px;">
-        <div>
-          <span class="eyebrow" style="color: var(--neon-emerald);">Daily Operations & Market Intelligence Narrative</span>
-          <h2>每日基金操作與白話決策報告</h2>
-        </div>
-        <span class="status-pill sys-tag">白話解讀 / 零專業門檻</span>
-      </div>
-      
-      <!-- 四要素市场与主力研判 -->
-      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px;">
-        <div style="background: rgba(0, 240, 153, 0.04); padding: 10px; border-radius: 4px; border: 1px solid rgba(0, 240, 153, 0.15);">
-          <div style="font-size: 11px; color: var(--muted);">大盤整體趨勢格局</div>
-          <div style="font-size: 13px; font-weight: 700; color: var(--neon-emerald); margin-top: 2px;">{html.escape(market_regime_str)}</div>
-        </div>
-        <div style="background: rgba(0, 240, 255, 0.04); padding: 10px; border-radius: 4px; border: 1px solid rgba(0, 240, 255, 0.15);">
-          <div style="font-size: 11px; color: var(--muted);">市場情緒指標 (RSI)</div>
-          <div style="font-size: 13px; font-weight: 700; color: var(--neon-cyan); margin-top: 2px;">{html.escape(sentiment_str)}</div>
-        </div>
-        <div style="background: rgba(255, 170, 0, 0.04); padding: 10px; border-radius: 4px; border: 1px solid rgba(255, 170, 0, 0.15);">
-          <div style="font-size: 11px; color: var(--muted);">主力資金集中板塊</div>
-          <div style="font-size: 13px; font-weight: 700; color: var(--orange); margin-top: 2px;">{html.escape(top_sector_str)}</div>
-        </div>
-      </div>
-      
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 12px;">
-        <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 4px; border: 1px solid var(--line);">
-          <h4 style="margin: 0 0 6px 0; color: var(--neon-cyan); font-size: 13px;">一、 開盤前準備 (Pre-Market Scan)</h4>
-          <p style="margin: 0; font-size: 12px; line-height: 1.6; color: var(--muted);">{html.escape(pre_market_text)}</p>
-        </div>
-        <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 4px; border: 1px solid var(--line);">
-          <h4 style="margin: 0 0 6px 0; color: var(--orange); font-size: 13px;">四、 明日開盤觀察重點 (Next Day Focus)</h4>
-          <p style="margin: 0; font-size: 12px; line-height: 1.6; color: var(--muted);">{html.escape(next_day_text)}</p>
-        </div>
-      </div>
-      
-      <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 4px; border: 1px solid var(--line); margin-bottom: 12px;">
-        <h4 style="margin: 0 0 6px 0; color: var(--neon-emerald); font-size: 13px;">二、 盤中/今日執行明細 (Execution Details)</h4>
-        {trade_details_html}
-      </div>
-      
-      <div style="background: rgba(0, 240, 153, 0.05); padding: 12px; border-radius: 4px; border: 1px solid rgba(0, 240, 153, 0.2);">
-        <h4 style="margin: 0 0 6px 0; color: var(--neon-emerald); font-size: 13px;">三、 為什麼做這些動作？ (Plain-Language Rationale)</h4>
-        <p style="margin: 0; font-size: 12px; line-height: 1.6; color: var(--ink);">{rationale_text}</p>
-      </div>
-    </div>
-"""
     strategy_structure_text = ""
     if model_portfolio and model_portfolio.method == "multi-factor-shrink":
         strategy_structure_text = strategy_structure_summary(
@@ -3631,85 +3616,6 @@ def build_plain_language_daily_narrative(
         <ul class="risk-list">{top_signal_items}</ul>
 {research_report_html}
       </section>
-"""
-
-def build_plain_language_daily_narrative(
-    model_portfolio: ModelPortfolio | None,
-    execution_summary: ExecutionOrdersSummary | None,
-    actionable_signals: list[TradeSignal],
-    taiex_snapshot: TaiexSnapshot | None,
-    market_date: str,
-) -> str:
-    has_trades = execution_summary and execution_summary.orders and len(execution_summary.orders) > 0
-    pre_market_text = (
-        "開盤前，量化模型對股票池進行了全量自動掃描，重點追蹤 20日/60日均線的趨勢動能；"
-        "對處在上升通道、大資金持續流入的股票維持關注，對跌破均線或出現虧損的股票拉入止損觀察清單。"
-    )
-    
-    trade_details_items = []
-    if has_trades:
-        for sym, order in execution_summary.orders.items():
-            name = order.get("name", sym)
-            shares = int(order.get("shares", 0))
-            price = float(order.get("buy_reference_price", 0.0))
-            total = float(order.get("total_buy_cost", 0.0) or price * shares)
-            action_type = "賣出清倉止損" if shares > 0 else "買入/加碼順勢龍頭"
-            trade_details_items.append(
-                f"<li><b>【{action_type}】{html.escape(sym)} {html.escape(name)}</b>："
-                f" 成交 {shares:,} 股，成交均價 NT$ {price:,.2f}，總金額 NT$ {total:,.2f}。</li>"
-            )
-        trade_details_html = f'<ul class="risk-list" style="margin-top: 6px; line-height: 1.7;">{"".join(trade_details_items)}</ul>'
-    else:
-        trade_details_html = '<p style="margin-top: 6px; color: var(--muted); font-size: 13px;">今日（或最近一交易日）無新觸發的模擬買賣扣款。持倉股票全部處在安全風控線內，繼續持股觀察。</p>'
-    
-    if has_trades:
-        rationale_text = (
-            "<b>【白話決策邏輯】</b>：今天執行的操作主要是為了<b>‘截斷虧損、保護本金、換倉強勢龍頭’</b>。"
-            "對於觸發賣出的股票，是因為它們跌破了 20日均線支撐或達到了止損線，算法嚴格按紀律 100% 清倉止損，不抱僥倖心理死守；"
-            "同時把回收的資金集中用於加倉處於上升通道、漲勢強勁的領漲龍頭，爭取實現年化 8% 以上的絕對正收益。"
-        )
-    else:
-        rationale_text = (
-            "<b>【白話決策邏輯】</b>：今日持倉整體走勢平穩，既未觸及止損線，也無需強制換倉。"
-            "在順勢行情中‘讓利潤奔跑’、避免無意義的頻繁換手，是降低交易手續費、維持高夏普比率的最佳策略。"
-        )
-
-    next_day_text = (
-        "明天開盤後，算法將繼續實時追蹤持倉股票的均線支撐與動能得分。"
-        "一旦有股票出現趨勢破位，將在開盤後第一時間執行止損；若出現新突破的領漲龍頭，將把資金自動輪換重倉買入。"
-    )
-    
-    return f"""
-    <div class="panel" style="margin-bottom: 20px; border-left: 4px solid var(--neon-emerald);">
-      <div class="section-heading" style="margin-bottom: 10px;">
-        <div>
-          <span class="eyebrow" style="color: var(--neon-emerald);">Daily Operations & Execution Narrative</span>
-          <h2>每日基金操作與白話決策報告</h2>
-        </div>
-        <span class="status-pill sys-tag">白話解讀 / 零專業門檻</span>
-      </div>
-      
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 12px;">
-        <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 4px; border: 1px solid var(--line);">
-          <h4 style="margin: 0 0 6px 0; color: var(--neon-cyan); font-size: 13px;">一、 開盤前準備 (Pre-Market Scan)</h4>
-          <p style="margin: 0; font-size: 12px; line-height: 1.6; color: var(--muted);">{html.escape(pre_market_text)}</p>
-        </div>
-        <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 4px; border: 1px solid var(--line);">
-          <h4 style="margin: 0 0 6px 0; color: var(--orange); font-size: 13px;">四、 明日開盤觀察重點 (Next Day Focus)</h4>
-          <p style="margin: 0; font-size: 12px; line-height: 1.6; color: var(--muted);">{html.escape(next_day_text)}</p>
-        </div>
-      </div>
-      
-      <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 4px; border: 1px solid var(--line); margin-bottom: 12px;">
-        <h4 style="margin: 0 0 6px 0; color: var(--neon-emerald); font-size: 13px;">二、 盤中/今日執行明細 (Execution Details)</h4>
-        {trade_details_html}
-      </div>
-      
-      <div style="background: rgba(0, 240, 153, 0.05); padding: 12px; border-radius: 4px; border: 1px solid rgba(0, 240, 153, 0.2);">
-        <h4 style="margin: 0 0 6px 0; color: var(--neon-emerald); font-size: 13px;">三、 為什麼做這些動作？ (Plain-Language Rationale)</h4>
-        <p style="margin: 0; font-size: 12px; line-height: 1.6; color: var(--ink);">{rationale_text}</p>
-      </div>
-    </div>
 """
 
     # === 每日简报 (Daily Summary Report) & KPI 仪表盘组装 ===
@@ -5670,6 +5576,7 @@ def build_plain_language_daily_narrative(
 </body>
 </html>"""
     output.write_text(page, encoding="utf-8")
+
 
 
 
