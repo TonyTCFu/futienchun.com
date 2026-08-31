@@ -5465,3 +5465,44 @@ fatal: unable to access 'https://github.com/TonyTCFu/futienchun.com.git/': Empty
 [2026-08-31 21:57:12] 成功: scripts/sync_all_metrics.py 执行完毕。
 [2026-08-31 21:57:12] 输出片段: Updated run_local_qa_checks.py | Updated validate_research_brief_sync.py | Warning: Obsidian note /Users/tonyfu/Library/Mobile Documents/iCloud~md~obsidian/Documents/AI-Knowledge-Wiki/02-The-Wiki/05-商业金融与量化交易/01-量化交易/台股量化基金.md not found. Skipping Obsidian update.
 [2026-08-31 21:57:12] 开始执行 (第 1/3 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/publish_dashboard.py
+[2026-08-31 23:41:56] 警告: git pull origin main 失败，退出码 1，可能存在本地冲突或网络波动。
+[2026-08-31 23:41:56] 标准错误:
+error: RPC failed; curl 6 Recv failure: Operation timed out
+fatal: expected flush after ref listing
+
+[2026-08-31 23:41:56] 开始执行 (第 1/3 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/shioaji_sync_recent.py
+[2026-08-31 23:42:52] 警告: scripts/shioaji_sync_recent.py 执行失败 (尝试 1/3)，退出码 1
+[2026-08-31 23:42:52] 标准输出:
+=== Shioaji 行情同步补全启动 ===
+股票池加载成功，共 20 档标的: 0050, 0056, 00878, 006208, 00713, 00881, 00919, 2330, 2317, 2454, 2303, 2881, 2882, 2412, 2382, 2049, 3491, 2313, 2308, 6285
+正在登录永丰金 Shioaji API...
+错误: 登录 Shioaji 失败: login: connection error
+
+[2026-08-31 23:42:52] 标准错误:
+SDK NOTICE Mon Aug 31 23:42:30.660 2026 solClient.c:10959                    (16c5a3000) Connect attempt for host '203.66.91.161:80' for session '(c0,s1)_sinopac(client name 'PYAPI/51chmFDUPM/0831/154227/544299000/LOGINING', VPN name 'sinopac', peer host '203.66.91.161:80' address 'IP 203.66.91.161', connection 'tcp_TxRx' local address 'IP 10.8.0.9:53939')' timed out
+SDK NOTICE Mon Aug 31 23:42:36.835 2026 solClient.c:10959                    (16c5a3000) Connect attempt for host '203.66.91.161:80' for session '(c0,s1)_sinopac(client name 'PYAPI/51chmFDUPM/0831/154227/544299000/LOGINING', VPN name 'sinopac', peer host '203.66.91.161:80' address 'IP 203.66.91.161', connection 'tcp_TxRx' local address 'IP 10.8.0.9:53944')' timed out
+
+[2026-08-31 23:42:52] 将在 30 秒后重试...
+[2026-08-31 23:43:22] 开始执行 (第 2/3 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/shioaji_sync_recent.py
+[2026-08-31 23:44:19] 警告: scripts/shioaji_sync_recent.py 执行失败 (尝试 2/3)，退出码 1
+[2026-08-31 23:44:19] 标准输出:
+=== Shioaji 行情同步补全启动 ===
+股票池加载成功，共 20 档标的: 0050, 0056, 00878, 006208, 00713, 00881, 00919, 2330, 2317, 2454, 2303, 2881, 2882, 2412, 2382, 2049, 3491, 2313, 2308, 6285
+正在登录永丰金 Shioaji API...
+错误: 登录 Shioaji 失败: login: connection error
+
+[2026-08-31 23:44:19] 标准错误:
+SDK NOTICE Mon Aug 31 23:43:57.175 2026 solClient.c:10959                    (16f16b000) Connect attempt for host '203.66.91.161:80' for session '(c0,s1)_sinopac(client name 'PYAPI/51chmFDUPM/0831/154354/098912000/LOGINING', VPN name 'sinopac', peer host '203.66.91.161:80' address 'IP 203.66.91.161', connection 'tcp_TxRx' local address 'IP 10.8.0.9:53945')' timed out
+SDK NOTICE Mon Aug 31 23:44:03.308 2026 solClient.c:10959                    (16f16b000) Connect attempt for host '203.66.91.161:80' for session '(c0,s1)_sinopac(client name 'PYAPI/51chmFDUPM/0831/154354/098912000/LOGINING', VPN name 'sinopac', peer host '203.66.91.161:80' address 'IP 203.66.91.161', connection 'tcp_TxRx' local address 'IP 10.8.0.9:53946')' timed out
+
+[2026-08-31 23:44:19] 将在 30 秒后重试...
+[2026-08-31 23:44:49] 开始执行 (第 3/3 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/shioaji_sync_recent.py
+[2026-08-31 23:47:15] 成功: scripts/shioaji_sync_recent.py 执行完毕。
+[2026-08-31 23:47:15] 输出片段: 处理标的 6285 时发生异常: contracts: transient transport failure: Session error SolClient send request api/v1/data/contracts_version, code: NotReady, Error ErrorInfo { sub_code: SubCode(SessionNotEstablished), error_str: "Unable to wait for session '(c0,s1)_sinopac' to be established" } |  | === 同步完成: 成功 0/20 档标的 ===
+[2026-08-31 23:47:15] 开始执行重建命令: /Users/tonyfu/tw_quant_runner/.venv/bin/python src/risk_dashboard.py --start 2024-01 --end 2026-08 --offline-cache --model-portfolio --model-method multi-factor-shrink --ai-tilt moderate --market-source public-close --market-mode close --execute-simulated-trades
+[2026-08-31 23:47:15] 重建尝试 (第 1/2 次)...
+[2026-08-31 23:47:46] 成功: risk_dashboard.py 重建完毕。
+[2026-08-31 23:47:46] 开始执行 (第 1/1 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/sync_all_metrics.py
+[2026-08-31 23:47:46] 成功: scripts/sync_all_metrics.py 执行完毕。
+[2026-08-31 23:47:46] 输出片段: Updated run_local_qa_checks.py | Updated validate_research_brief_sync.py | Warning: Obsidian note /Users/tonyfu/Library/Mobile Documents/iCloud~md~obsidian/Documents/AI-Knowledge-Wiki/02-The-Wiki/05-商业金融与量化交易/01-量化交易/台股量化基金.md not found. Skipping Obsidian update.
+[2026-08-31 23:47:46] 开始执行 (第 1/3 次尝试): /Users/tonyfu/tw_quant_runner/.venv/bin/python /Users/tonyfu/tw_quant_runner/scripts/publish_dashboard.py
