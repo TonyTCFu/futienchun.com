@@ -57,8 +57,8 @@ def validate_markdown_output(path: Path) -> None:
     required_fragments = [
         "# 台股量化 Dashboard 研究摘要",
         "AI 供应链权重 24.62%",
-        "风险贡献 32.24%",
-        "风险-权重差 +7.62%",
+        "风险贡献 32.26%",
+        "风险-权重差 +7.63%",
         "不代表未来报酬预测",
         "实盘订单或券商账户状态",
         "默认写入 `/tmp` 作为预览",
