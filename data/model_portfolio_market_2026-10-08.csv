@@ -1,2 +1,2 @@
 ﻿mark_date,market_mode,quote_time,symbol,name,shares,entry_price,entry_cost,current_price,current_price_source,current_market_value,unrealized_pnl,unrealized_pnl_pct,volume,total_volume,total_amount,quote_status
-2026-10-08,close,2026-10-08T22:42:18,2330,台積電,13,2430.0,31635.0,2550.0,public_close,33150.0,1515.0,0.047889995258416314,6030.0,6030.0,15376500000.0,ready
+2026-10-08,close,2026-10-08T23:12:56,2330,台積電,13,2430.0,31635.0,2550.0,public_close,33150.0,1515.0,0.047889995258416314,6030.0,6030.0,15376500000.0,ready
