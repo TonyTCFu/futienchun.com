@@ -1,2 +1,2 @@
 ﻿execution_date,symbol,name,buy_reference_price,shares,gross_amount,buy_commission_estimate,buy_tax_estimate,total_buy_cost,future_sell_tax_estimate,status
-2026-10-21,2330,台積電,2430.0000,13,31590.00,45.00,0.00,31635.00,94.00,simulated_position
+2026-10-22,2330,台積電,2430.0000,13,31590.00,45.00,0.00,31635.00,94.00,simulated_position
