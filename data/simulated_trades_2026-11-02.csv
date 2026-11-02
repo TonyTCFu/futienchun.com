@@ -1,1 +1,2 @@
 ﻿trade_id,trade_date,symbol,name,action,shares,trade_price,gross_amount,fee,tax,net_amount,realized_cost,realized_pnl,remaining_shares,reason,status
+paper-20261102-2330-sell-01-768078bd19,2026-11-02,2330,台積電,sell,13,2330.0000,30290.00,43.00,90.00,30157.00,31635.00,-1478.00,0,模拟盘持仓亏损超过 4% 或趋势破位，触发全额止损出局，资金轮换至强势 Alpha 龙头。,executed
