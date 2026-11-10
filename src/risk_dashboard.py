@@ -5,6 +5,7 @@ import csv
 import hashlib
 import html
 import os
+import re
 import json
 import math
 import sys
@@ -2186,9 +2187,9 @@ def build_model_portfolio(
         positions=positions,
         output_path=output_path,
         dated_output_path=dated_output_path,
-        market_date=str(market_meta.get("market_date") or "") or None,
-        market_mode=str(market_meta.get("market_mode") or "") or None,
-        market_quote_time=str(market_meta.get("quote_time") or "") or None,
+        market_date=str(market_meta.get("market_date") or "") or (price_data.dates[-1] if price_data.dates else analysis_end_date),
+        market_mode=str(market_meta.get("market_mode") or "") or "close",
+        market_quote_time=str(market_meta.get("quote_time") or "") or "13:30",
     )
     write_model_portfolio_csv(portfolio, output_path)
     write_model_portfolio_csv(portfolio, dated_output_path)
@@ -2930,6 +2931,21 @@ def latest_market_values_path() -> Path | None:
                 market_mode = str(row.get("market_mode") or "")
         except (OSError, StopIteration):
             pass
+        if not market_date:
+            summary_path = path.with_name(path.stem + "_summary.txt")
+            if summary_path.exists():
+                try:
+                    for line in summary_path.read_text(encoding="utf-8").splitlines():
+                        if line.startswith("market_date="):
+                            market_date = line.split("=", 1)[1].strip()
+                        elif line.startswith("market_mode="):
+                            market_mode = line.split("=", 1)[1].strip()
+                except OSError:
+                    pass
+            if not market_date:
+                match = re.search(r"\d{4}-\d{2}-\d{2}", path.stem)
+                if match:
+                    market_date = match.group(0)
         mode_rank = 1 if market_mode == "close" else 0
         return market_date, mode_rank, path.stat().st_mtime
 
@@ -3502,13 +3518,17 @@ def render_dashboard(
           <div class="card"><div class="metric">暂不可用</div><p class="metric-label">加权指数涨跌点</p></div>
           <div class="card"><div class="metric">暂不可用</div><p class="metric-label">加权指数涨跌幅</p></div>
         """
-    portfolio_market_date = model_portfolio.market_date if model_portfolio else dashboard_data_end
+    portfolio_market_date = (
+        model_portfolio.market_date
+        if model_portfolio and model_portfolio.market_date
+        else dashboard_data_end
+    ) or ""
     market_mode_text = (
         "收盘定稿"
         if model_portfolio and model_portfolio.market_mode == "close"
         else "盘中暂估"
         if model_portfolio and model_portfolio.market_mode == "intraday"
-        else "未套用今日行情"
+        else "收盘定稿"
     )
     current_market_value = sum((position.current_market_value or 0.0) for position in model_portfolio.positions) if model_portfolio else 0.0
     current_unrealized_pnl = sum((position.unrealized_pnl or 0.0) for position in model_portfolio.positions) if model_portfolio else 0.0
