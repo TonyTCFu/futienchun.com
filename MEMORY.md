@@ -82,6 +82,12 @@
 - **每日简报 (Daily Summary) 与结构化量化看板重构**：
   - **背景原因**：为响应用户对组合盈亏、个股涨跌红黑榜、现金占比、以及已执行成交明细的综合追踪需求，在网页顶部/首个 Tab 处整合了包含核心量化 KPI 卡片、个股收益前/后三名涨跌幅排名，以及从成交 CSV 解析得出的股数均价明细表格的全新交互面板。
   - **样式规范**：在 f-string HTML 模板拼接中，所有 CSS 样式的大括号 `{` 与 `}` 必须双写为 `{{` 与 `}}` 避免语法冲突，颜色样式必须严格对齐系统现有的 `--neon-emerald` (positive) 与 `--crimson` (negative) 变量。
+- **模拟盘空仓导致市值档无个股记录引发 NoneType 崩溃停更**：
+  - **背景原因**：2026-11-02 模拟盘止损清仓（100% 现金，持仓为 0）后，`build_public_close_market_values` 导出的每日市值 CSV 仅含表头，导致 `load_model_market_values` 返回空字典。`build_model_portfolio` 提取 `market_meta` 为空字典并将 `portfolio.market_date` 设为 `None`。渲染 Dashboard 调用 `html.escape(portfolio_market_date)` 时抛出 `'NoneType' object has no attribute 'replace'`，致使 11-02 起每日更新流水线中断报错，公网看板冻结 8 天。
+  - **根治方案**：
+    1. 在 `build_model_portfolio` 中增加回退兜底，当 `market_meta` 为空时自动回退至 `price_data.dates[-1]`，`market_mode` 默认兜底为 `close`。
+    2. 在 `latest_market_values_path` 中增加配套 `*_summary.txt` 及文件名日期匹配，保证空表头文件仍能正确读取最新日期。
+    3. 在 `render_dashboard` 中确保 `portfolio_market_date` 严格兜底非空字符串，消除任何潜在 `None` 逃逸。
 
 
 
