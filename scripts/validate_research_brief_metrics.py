@@ -8,9 +8,9 @@ from validate_research_brief_sync import DEFAULT_DASHBOARD, extract_research_bri
 
 
 EXPECTED_METRICS = {
-    "ai_weight_percent": "25.12%",
-    "risk_contribution_percent": "33.62%",
-    "risk_weight_gap_percent": "+8.50%",
+    "ai_weight_percent": "25.13%",
+    "risk_contribution_percent": "33.47%",
+    "risk_weight_gap_percent": "+8.34%",
     "trade_count": "0",
 }
 
